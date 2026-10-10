@@ -1,0 +1,20 @@
+Output of scripts/tangem/check-allocator.ts at the commit of this file, for the decisions simulate.ts
+wrote with TANGEM_DECISIONS for each allocator config (the Thesauros run without stress).
+
+config.base.alloc-a.fee10: 2190 decisions, 66 of them a move (2 back under the cap), 0 differ from production
+config.base.alloc-a: 2190 decisions, 66 of them a move (2 back under the cap), 0 differ from production
+config.base.alloc-a.measured: 2190 decisions, 13 of them a move (2 back under the cap), 0 differ from production
+config.base.alloc-a.no-rate-impact: 2190 decisions, 10 of them a move (2 back under the cap), 0 differ from production
+config.base.alloc-b: 2190 decisions, 66 of them a move (2 back under the cap), 0 differ from production
+config.base.alloc-b.measured: 2190 decisions, 13 of them a move (2 back under the cap), 0 differ from production
+config.base.alloc-strict: 2190 decisions, 32 of them a move (27 back under the cap), 0 differ from production
+config.ethereum.alloc-a.fee10: 2179 decisions, 232 of them a move (2 back under the cap), 0 differ from production
+config.ethereum.alloc-a: 2179 decisions, 232 of them a move (2 back under the cap), 0 differ from production
+config.ethereum.alloc-a.measured: 2179 decisions, 181 of them a move (2 back under the cap), 0 differ from production
+config.ethereum.alloc-a.no-fluid-no-spark: 2179 decisions, 231 of them a move (0 back under the cap), 0 differ from production
+config.ethereum.alloc-a.no-fluid: 2179 decisions, 265 of them a move (1 back under the cap), 0 differ from production
+config.ethereum.alloc-a.no-rate-impact: 2179 decisions, 138 of them a move (5 back under the cap), 0 differ from production
+config.ethereum.alloc-b: 2179 decisions, 195 of them a move (2 back under the cap), 0 differ from production
+config.ethereum.alloc-b.measured: 2179 decisions, 163 of them a move (1 back under the cap), 0 differ from production
+config.ethereum.alloc-strict: 2179 decisions, 245 of them a move (3 back under the cap), 0 differ from production
+liquidity rule: five constructed cases hold; on 14904 random inputs with a venue of zero signal (14042 of them a move) no leg entered one

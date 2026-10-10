@@ -7,2367 +7,6 @@ for (const key of ["BASE_RPC_URL", "ARBITRUM_RPC_URL", "PLASMA_RPC_URL", "MONAD_
 var import_fs = require("fs");
 var import_path = require("path");
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/decimal.js/decimal.mjs
-var EXP_LIMIT = 9e15;
-var MAX_DIGITS = 1e9;
-var NUMERALS = "0123456789abcdef";
-var LN10 = "2.3025850929940456840179914546843642076011014886287729760333279009675726096773524802359972050895982983419677840422862486334095254650828067566662873690987816894829072083255546808437998948262331985283935053089653777326288461633662222876982198867465436674744042432743651550489343149393914796194044002221051017141748003688084012647080685567743216228355220114804663715659121373450747856947683463616792101806445070648000277502684916746550586856935673420670581136429224554405758925724208241314695689016758940256776311356919292033376587141660230105703089634572075440370847469940168269282808481184289314848524948644871927809676271275775397027668605952496716674183485704422507197965004714951050492214776567636938662976979522110718264549734772662425709429322582798502585509785265383207606726317164309505995087807523710333101197857547331541421808427543863591778117054309827482385045648019095610299291824318237525357709750539565187697510374970888692180205189339507238539205144634197265287286965110862571492198849978748873771345686209167058";
-var PI = "3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679821480865132823066470938446095505822317253594081284811174502841027019385211055596446229489549303819644288109756659334461284756482337867831652712019091456485669234603486104543266482133936072602491412737245870066063155881748815209209628292540917153643678925903600113305305488204665213841469519415116094330572703657595919530921861173819326117931051185480744623799627495673518857527248912279381830119491298336733624406566430860213949463952247371907021798609437027705392171762931767523846748184676694051320005681271452635608277857713427577896091736371787214684409012249534301465495853710507922796892589235420199561121290219608640344181598136297747713099605187072113499999983729780499510597317328160963185950244594553469083026425223082533446850352619311881710100031378387528865875332083814206171776691473035982534904287554687311595628638823537875937519577818577805321712268066130019278766111959092164201989380952572010654858632789";
-var DEFAULTS = {
-  // These values must be integers within the stated ranges (inclusive).
-  // Most of these values can be changed at run-time using the `Decimal.config` method.
-  // The maximum number of significant digits of the result of a calculation or base conversion.
-  // E.g. `Decimal.config({ precision: 20 });`
-  precision: 20,
-  // 1 to MAX_DIGITS
-  // The rounding mode used when rounding to `precision`.
-  //
-  // ROUND_UP         0 Away from zero.
-  // ROUND_DOWN       1 Towards zero.
-  // ROUND_CEIL       2 Towards +Infinity.
-  // ROUND_FLOOR      3 Towards -Infinity.
-  // ROUND_HALF_UP    4 Towards nearest neighbour. If equidistant, up.
-  // ROUND_HALF_DOWN  5 Towards nearest neighbour. If equidistant, down.
-  // ROUND_HALF_EVEN  6 Towards nearest neighbour. If equidistant, towards even neighbour.
-  // ROUND_HALF_CEIL  7 Towards nearest neighbour. If equidistant, towards +Infinity.
-  // ROUND_HALF_FLOOR 8 Towards nearest neighbour. If equidistant, towards -Infinity.
-  //
-  // E.g.
-  // `Decimal.rounding = 4;`
-  // `Decimal.rounding = Decimal.ROUND_HALF_UP;`
-  rounding: 4,
-  // 0 to 8
-  // The modulo mode used when calculating the modulus: a mod n.
-  // The quotient (q = a / n) is calculated according to the corresponding rounding mode.
-  // The remainder (r) is calculated as: r = a - n * q.
-  //
-  // UP         0 The remainder is positive if the dividend is negative, else is negative.
-  // DOWN       1 The remainder has the same sign as the dividend (JavaScript %).
-  // FLOOR      3 The remainder has the same sign as the divisor (Python %).
-  // HALF_EVEN  6 The IEEE 754 remainder function.
-  // EUCLID     9 Euclidian division. q = sign(n) * floor(a / abs(n)). Always positive.
-  //
-  // Truncated division (1), floored division (3), the IEEE 754 remainder (6), and Euclidian
-  // division (9) are commonly used for the modulus operation. The other rounding modes can also
-  // be used, but they may not give useful results.
-  modulo: 1,
-  // 0 to 9
-  // The exponent value at and beneath which `toString` returns exponential notation.
-  // JavaScript numbers: -7
-  toExpNeg: -7,
-  // 0 to -EXP_LIMIT
-  // The exponent value at and above which `toString` returns exponential notation.
-  // JavaScript numbers: 21
-  toExpPos: 21,
-  // 0 to EXP_LIMIT
-  // The minimum exponent value, beneath which underflow to zero occurs.
-  // JavaScript numbers: -324  (5e-324)
-  minE: -EXP_LIMIT,
-  // -1 to -EXP_LIMIT
-  // The maximum exponent value, above which overflow to Infinity occurs.
-  // JavaScript numbers: 308  (1.7976931348623157e+308)
-  maxE: EXP_LIMIT,
-  // 1 to EXP_LIMIT
-  // Whether to use cryptographically-secure random number generation, if available.
-  crypto: false
-  // true/false
-};
-var inexact;
-var quadrant;
-var external = true;
-var decimalError = "[DecimalError] ";
-var invalidArgument = decimalError + "Invalid argument: ";
-var precisionLimitExceeded = decimalError + "Precision limit exceeded";
-var cryptoUnavailable = decimalError + "crypto unavailable";
-var tag = "[object Decimal]";
-var mathfloor = Math.floor;
-var mathpow = Math.pow;
-var isBinary = /^0b([01]+(\.[01]*)?|\.[01]+)(p[+-]?\d+)?$/i;
-var isHex = /^0x([0-9a-f]+(\.[0-9a-f]*)?|\.[0-9a-f]+)(p[+-]?\d+)?$/i;
-var isOctal = /^0o([0-7]+(\.[0-7]*)?|\.[0-7]+)(p[+-]?\d+)?$/i;
-var isDecimal = /^(\d+(\.\d*)?|\.\d+)(e[+-]?\d+)?$/i;
-var BASE = 1e7;
-var LOG_BASE = 7;
-var MAX_SAFE_INTEGER = 9007199254740991;
-var LN10_PRECISION = LN10.length - 1;
-var PI_PRECISION = PI.length - 1;
-var P = { toStringTag: tag };
-P.absoluteValue = P.abs = function() {
-  var x = new this.constructor(this);
-  if (x.s < 0)
-    x.s = 1;
-  return finalise(x);
-};
-P.ceil = function() {
-  return finalise(new this.constructor(this), this.e + 1, 2);
-};
-P.clampedTo = P.clamp = function(min2, max2) {
-  var k, x = this, Ctor = x.constructor;
-  min2 = new Ctor(min2);
-  max2 = new Ctor(max2);
-  if (!min2.s || !max2.s)
-    return new Ctor(NaN);
-  if (min2.gt(max2))
-    throw Error(invalidArgument + max2);
-  k = x.cmp(min2);
-  return k < 0 ? min2 : x.cmp(max2) > 0 ? max2 : new Ctor(x);
-};
-P.comparedTo = P.cmp = function(y) {
-  var i, j, xdL, ydL, x = this, xd = x.d, yd = (y = new x.constructor(y)).d, xs = x.s, ys = y.s;
-  if (!xd || !yd) {
-    return !xs || !ys ? NaN : xs !== ys ? xs : xd === yd ? 0 : !xd ^ xs < 0 ? 1 : -1;
-  }
-  if (!xd[0] || !yd[0])
-    return xd[0] ? xs : yd[0] ? -ys : 0;
-  if (xs !== ys)
-    return xs;
-  if (x.e !== y.e)
-    return x.e > y.e ^ xs < 0 ? 1 : -1;
-  xdL = xd.length;
-  ydL = yd.length;
-  for (i = 0, j = xdL < ydL ? xdL : ydL; i < j; ++i) {
-    if (xd[i] !== yd[i])
-      return xd[i] > yd[i] ^ xs < 0 ? 1 : -1;
-  }
-  return xdL === ydL ? 0 : xdL > ydL ^ xs < 0 ? 1 : -1;
-};
-P.cosine = P.cos = function() {
-  var pr, rm, x = this, Ctor = x.constructor;
-  if (!x.d)
-    return new Ctor(NaN);
-  if (!x.d[0])
-    return new Ctor(1);
-  pr = Ctor.precision;
-  rm = Ctor.rounding;
-  Ctor.precision = pr + Math.max(x.e, x.sd()) + LOG_BASE;
-  Ctor.rounding = 1;
-  x = cosine(Ctor, toLessThanHalfPi(Ctor, x));
-  Ctor.precision = pr;
-  Ctor.rounding = rm;
-  return finalise(quadrant == 2 || quadrant == 3 ? x.neg() : x, pr, rm, true);
-};
-P.cubeRoot = P.cbrt = function() {
-  var e, m, n2, r, rep, s, sd, t, t3, t3plusx, x = this, Ctor = x.constructor;
-  if (!x.isFinite() || x.isZero())
-    return new Ctor(x);
-  external = false;
-  s = x.s * mathpow(x.s * x, 1 / 3);
-  if (!s || Math.abs(s) == 1 / 0) {
-    n2 = digitsToString(x.d);
-    e = x.e;
-    if (s = (e - n2.length + 1) % 3)
-      n2 += s == 1 || s == -2 ? "0" : "00";
-    s = mathpow(n2, 1 / 3);
-    e = mathfloor((e + 1) / 3) - (e % 3 == (e < 0 ? -1 : 2));
-    if (s == 1 / 0) {
-      n2 = "5e" + e;
-    } else {
-      n2 = s.toExponential();
-      n2 = n2.slice(0, n2.indexOf("e") + 1) + e;
-    }
-    r = new Ctor(n2);
-    r.s = x.s;
-  } else {
-    r = new Ctor(s.toString());
-  }
-  sd = (e = Ctor.precision) + 3;
-  for (; ; ) {
-    t = r;
-    t3 = t.times(t).times(t);
-    t3plusx = t3.plus(x);
-    r = divide(t3plusx.plus(x).times(t), t3plusx.plus(t3), sd + 2, 1);
-    if (digitsToString(t.d).slice(0, sd) === (n2 = digitsToString(r.d)).slice(0, sd)) {
-      n2 = n2.slice(sd - 3, sd + 1);
-      if (n2 == "9999" || !rep && n2 == "4999") {
-        if (!rep) {
-          finalise(t, e + 1, 0);
-          if (t.times(t).times(t).eq(x)) {
-            r = t;
-            break;
-          }
-        }
-        sd += 4;
-        rep = 1;
-      } else {
-        if (!+n2 || !+n2.slice(1) && n2.charAt(0) == "5") {
-          finalise(r, e + 1, 1);
-          m = !r.times(r).times(r).eq(x);
-        }
-        break;
-      }
-    }
-  }
-  external = true;
-  return finalise(r, e, Ctor.rounding, m);
-};
-P.decimalPlaces = P.dp = function() {
-  var w, d = this.d, n2 = NaN;
-  if (d) {
-    w = d.length - 1;
-    n2 = (w - mathfloor(this.e / LOG_BASE)) * LOG_BASE;
-    w = d[w];
-    if (w)
-      for (; w % 10 == 0; w /= 10)
-        n2--;
-    if (n2 < 0)
-      n2 = 0;
-  }
-  return n2;
-};
-P.dividedBy = P.div = function(y) {
-  return divide(this, new this.constructor(y));
-};
-P.dividedToIntegerBy = P.divToInt = function(y) {
-  var x = this, Ctor = x.constructor;
-  return finalise(divide(x, new Ctor(y), 0, 1, 1), Ctor.precision, Ctor.rounding);
-};
-P.equals = P.eq = function(y) {
-  return this.cmp(y) === 0;
-};
-P.floor = function() {
-  return finalise(new this.constructor(this), this.e + 1, 3);
-};
-P.greaterThan = P.gt = function(y) {
-  return this.cmp(y) > 0;
-};
-P.greaterThanOrEqualTo = P.gte = function(y) {
-  var k = this.cmp(y);
-  return k == 1 || k === 0;
-};
-P.hyperbolicCosine = P.cosh = function() {
-  var k, n2, pr, rm, len, x = this, Ctor = x.constructor, one = new Ctor(1);
-  if (!x.isFinite())
-    return new Ctor(x.s ? 1 / 0 : NaN);
-  if (x.isZero())
-    return one;
-  pr = Ctor.precision;
-  rm = Ctor.rounding;
-  Ctor.precision = pr + Math.max(x.e, x.sd()) + 4;
-  Ctor.rounding = 1;
-  len = x.d.length;
-  if (len < 32) {
-    k = Math.ceil(len / 3);
-    n2 = (1 / tinyPow(4, k)).toString();
-  } else {
-    k = 16;
-    n2 = "2.3283064365386962890625e-10";
-  }
-  x = taylorSeries(Ctor, 1, x.times(n2), new Ctor(1), true);
-  var cosh2_x, i = k, d8 = new Ctor(8);
-  for (; i--; ) {
-    cosh2_x = x.times(x);
-    x = one.minus(cosh2_x.times(d8.minus(cosh2_x.times(d8))));
-  }
-  return finalise(x, Ctor.precision = pr, Ctor.rounding = rm, true);
-};
-P.hyperbolicSine = P.sinh = function() {
-  var k, pr, rm, len, x = this, Ctor = x.constructor;
-  if (!x.isFinite() || x.isZero())
-    return new Ctor(x);
-  pr = Ctor.precision;
-  rm = Ctor.rounding;
-  Ctor.precision = pr + Math.max(x.e, x.sd()) + 4;
-  Ctor.rounding = 1;
-  len = x.d.length;
-  if (len < 3) {
-    x = taylorSeries(Ctor, 2, x, x, true);
-  } else {
-    k = 1.4 * Math.sqrt(len);
-    k = k > 16 ? 16 : k | 0;
-    x = x.times(1 / tinyPow(5, k));
-    x = taylorSeries(Ctor, 2, x, x, true);
-    var sinh2_x, d5 = new Ctor(5), d16 = new Ctor(16), d20 = new Ctor(20);
-    for (; k--; ) {
-      sinh2_x = x.times(x);
-      x = x.times(d5.plus(sinh2_x.times(d16.times(sinh2_x).plus(d20))));
-    }
-  }
-  Ctor.precision = pr;
-  Ctor.rounding = rm;
-  return finalise(x, pr, rm, true);
-};
-P.hyperbolicTangent = P.tanh = function() {
-  var pr, rm, x = this, Ctor = x.constructor;
-  if (!x.isFinite())
-    return new Ctor(x.s);
-  if (x.isZero())
-    return new Ctor(x);
-  pr = Ctor.precision;
-  rm = Ctor.rounding;
-  Ctor.precision = pr + 7;
-  Ctor.rounding = 1;
-  return divide(x.sinh(), x.cosh(), Ctor.precision = pr, Ctor.rounding = rm);
-};
-P.inverseCosine = P.acos = function() {
-  var x = this, Ctor = x.constructor, k = x.abs().cmp(1), pr = Ctor.precision, rm = Ctor.rounding;
-  if (k !== -1) {
-    return k === 0 ? x.isNeg() ? getPi(Ctor, pr, rm) : new Ctor(0) : new Ctor(NaN);
-  }
-  if (x.isZero())
-    return getPi(Ctor, pr + 4, rm).times(0.5);
-  Ctor.precision = pr + 6;
-  Ctor.rounding = 1;
-  x = new Ctor(1).minus(x).div(x.plus(1)).sqrt().atan();
-  Ctor.precision = pr;
-  Ctor.rounding = rm;
-  return x.times(2);
-};
-P.inverseHyperbolicCosine = P.acosh = function() {
-  var pr, rm, x = this, Ctor = x.constructor;
-  if (x.lte(1))
-    return new Ctor(x.eq(1) ? 0 : NaN);
-  if (!x.isFinite())
-    return new Ctor(x);
-  pr = Ctor.precision;
-  rm = Ctor.rounding;
-  Ctor.precision = pr + Math.max(Math.abs(x.e), x.sd()) + 4;
-  Ctor.rounding = 1;
-  external = false;
-  x = x.times(x).minus(1).sqrt().plus(x);
-  external = true;
-  Ctor.precision = pr;
-  Ctor.rounding = rm;
-  return x.ln();
-};
-P.inverseHyperbolicSine = P.asinh = function() {
-  var pr, rm, x = this, Ctor = x.constructor;
-  if (!x.isFinite() || x.isZero())
-    return new Ctor(x);
-  pr = Ctor.precision;
-  rm = Ctor.rounding;
-  Ctor.precision = pr + 2 * Math.max(Math.abs(x.e), x.sd()) + 6;
-  Ctor.rounding = 1;
-  external = false;
-  x = x.times(x).plus(1).sqrt().plus(x);
-  external = true;
-  Ctor.precision = pr;
-  Ctor.rounding = rm;
-  return x.ln();
-};
-P.inverseHyperbolicTangent = P.atanh = function() {
-  var pr, rm, wpr, xsd, x = this, Ctor = x.constructor;
-  if (!x.isFinite())
-    return new Ctor(NaN);
-  if (x.e >= 0)
-    return new Ctor(x.abs().eq(1) ? x.s / 0 : x.isZero() ? x : NaN);
-  pr = Ctor.precision;
-  rm = Ctor.rounding;
-  xsd = x.sd();
-  if (Math.max(xsd, pr) < 2 * -x.e - 1)
-    return finalise(new Ctor(x), pr, rm, true);
-  Ctor.precision = wpr = xsd - x.e;
-  x = divide(x.plus(1), new Ctor(1).minus(x), wpr + pr, 1);
-  Ctor.precision = pr + 4;
-  Ctor.rounding = 1;
-  x = x.ln();
-  Ctor.precision = pr;
-  Ctor.rounding = rm;
-  return x.times(0.5);
-};
-P.inverseSine = P.asin = function() {
-  var halfPi, k, pr, rm, x = this, Ctor = x.constructor;
-  if (x.isZero())
-    return new Ctor(x);
-  k = x.abs().cmp(1);
-  pr = Ctor.precision;
-  rm = Ctor.rounding;
-  if (k !== -1) {
-    if (k === 0) {
-      halfPi = getPi(Ctor, pr + 4, rm).times(0.5);
-      halfPi.s = x.s;
-      return halfPi;
-    }
-    return new Ctor(NaN);
-  }
-  Ctor.precision = pr + 6;
-  Ctor.rounding = 1;
-  x = x.div(new Ctor(1).minus(x.times(x)).sqrt().plus(1)).atan();
-  Ctor.precision = pr;
-  Ctor.rounding = rm;
-  return x.times(2);
-};
-P.inverseTangent = P.atan = function() {
-  var i, j, k, n2, px, t, r, wpr, x2, x = this, Ctor = x.constructor, pr = Ctor.precision, rm = Ctor.rounding;
-  if (!x.isFinite()) {
-    if (!x.s)
-      return new Ctor(NaN);
-    if (pr + 4 <= PI_PRECISION) {
-      r = getPi(Ctor, pr + 4, rm).times(0.5);
-      r.s = x.s;
-      return r;
-    }
-  } else if (x.isZero()) {
-    return new Ctor(x);
-  } else if (x.abs().eq(1) && pr + 4 <= PI_PRECISION) {
-    r = getPi(Ctor, pr + 4, rm).times(0.25);
-    r.s = x.s;
-    return r;
-  }
-  Ctor.precision = wpr = pr + 10;
-  Ctor.rounding = 1;
-  k = Math.min(28, wpr / LOG_BASE + 2 | 0);
-  for (i = k; i; --i)
-    x = x.div(x.times(x).plus(1).sqrt().plus(1));
-  external = false;
-  j = Math.ceil(wpr / LOG_BASE);
-  n2 = 1;
-  x2 = x.times(x);
-  r = new Ctor(x);
-  px = x;
-  for (; i !== -1; ) {
-    px = px.times(x2);
-    t = r.minus(px.div(n2 += 2));
-    px = px.times(x2);
-    r = t.plus(px.div(n2 += 2));
-    if (r.d[j] !== void 0)
-      for (i = j; r.d[i] === t.d[i] && i--; )
-        ;
-  }
-  if (k)
-    r = r.times(2 << k - 1);
-  external = true;
-  return finalise(r, Ctor.precision = pr, Ctor.rounding = rm, true);
-};
-P.isFinite = function() {
-  return !!this.d;
-};
-P.isInteger = P.isInt = function() {
-  return !!this.d && mathfloor(this.e / LOG_BASE) > this.d.length - 2;
-};
-P.isNaN = function() {
-  return !this.s;
-};
-P.isNegative = P.isNeg = function() {
-  return this.s < 0;
-};
-P.isPositive = P.isPos = function() {
-  return this.s > 0;
-};
-P.isZero = function() {
-  return !!this.d && this.d[0] === 0;
-};
-P.lessThan = P.lt = function(y) {
-  return this.cmp(y) < 0;
-};
-P.lessThanOrEqualTo = P.lte = function(y) {
-  return this.cmp(y) < 1;
-};
-P.logarithm = P.log = function(base) {
-  var isBase10, d, denominator, k, inf, num, sd, r, arg = this, Ctor = arg.constructor, pr = Ctor.precision, rm = Ctor.rounding, guard = 5;
-  if (base == null) {
-    base = new Ctor(10);
-    isBase10 = true;
-  } else {
-    base = new Ctor(base);
-    d = base.d;
-    if (base.s < 0 || !d || !d[0] || base.eq(1))
-      return new Ctor(NaN);
-    isBase10 = base.eq(10);
-  }
-  d = arg.d;
-  if (arg.s < 0 || !d || !d[0] || arg.eq(1)) {
-    return new Ctor(d && !d[0] ? -1 / 0 : arg.s != 1 ? NaN : d ? 0 : 1 / 0);
-  }
-  if (isBase10) {
-    if (d.length > 1) {
-      inf = true;
-    } else {
-      for (k = d[0]; k % 10 === 0; )
-        k /= 10;
-      inf = k !== 1;
-    }
-  }
-  external = false;
-  sd = pr + guard;
-  num = naturalLogarithm(arg, sd);
-  denominator = isBase10 ? getLn10(Ctor, sd + 10) : naturalLogarithm(base, sd);
-  r = divide(num, denominator, sd, 1);
-  if (checkRoundingDigits(r.d, k = pr, rm)) {
-    do {
-      sd += 10;
-      num = naturalLogarithm(arg, sd);
-      denominator = isBase10 ? getLn10(Ctor, sd + 10) : naturalLogarithm(base, sd);
-      r = divide(num, denominator, sd, 1);
-      if (!inf) {
-        if (+digitsToString(r.d).slice(k + 1, k + 15) + 1 == 1e14) {
-          r = finalise(r, pr + 1, 0);
-        }
-        break;
-      }
-    } while (checkRoundingDigits(r.d, k += 10, rm));
-  }
-  external = true;
-  return finalise(r, pr, rm);
-};
-P.minus = P.sub = function(y) {
-  var d, e, i, j, k, len, pr, rm, xd, xe, xLTy, yd, x = this, Ctor = x.constructor;
-  y = new Ctor(y);
-  if (!x.d || !y.d) {
-    if (!x.s || !y.s)
-      y = new Ctor(NaN);
-    else if (x.d)
-      y.s = -y.s;
-    else
-      y = new Ctor(y.d || x.s !== y.s ? x : NaN);
-    return y;
-  }
-  if (x.s != y.s) {
-    y.s = -y.s;
-    return x.plus(y);
-  }
-  xd = x.d;
-  yd = y.d;
-  pr = Ctor.precision;
-  rm = Ctor.rounding;
-  if (!xd[0] || !yd[0]) {
-    if (yd[0])
-      y.s = -y.s;
-    else if (xd[0])
-      y = new Ctor(x);
-    else
-      return new Ctor(rm === 3 ? -0 : 0);
-    return external ? finalise(y, pr, rm) : y;
-  }
-  e = mathfloor(y.e / LOG_BASE);
-  xe = mathfloor(x.e / LOG_BASE);
-  xd = xd.slice();
-  k = xe - e;
-  if (k) {
-    xLTy = k < 0;
-    if (xLTy) {
-      d = xd;
-      k = -k;
-      len = yd.length;
-    } else {
-      d = yd;
-      e = xe;
-      len = xd.length;
-    }
-    i = Math.max(Math.ceil(pr / LOG_BASE), len) + 2;
-    if (k > i) {
-      k = i;
-      d.length = 1;
-    }
-    d.reverse();
-    for (i = k; i--; )
-      d.push(0);
-    d.reverse();
-  } else {
-    i = xd.length;
-    len = yd.length;
-    xLTy = i < len;
-    if (xLTy)
-      len = i;
-    for (i = 0; i < len; i++) {
-      if (xd[i] != yd[i]) {
-        xLTy = xd[i] < yd[i];
-        break;
-      }
-    }
-    k = 0;
-  }
-  if (xLTy) {
-    d = xd;
-    xd = yd;
-    yd = d;
-    y.s = -y.s;
-  }
-  len = xd.length;
-  for (i = yd.length - len; i > 0; --i)
-    xd[len++] = 0;
-  for (i = yd.length; i > k; ) {
-    if (xd[--i] < yd[i]) {
-      for (j = i; j && xd[--j] === 0; )
-        xd[j] = BASE - 1;
-      --xd[j];
-      xd[i] += BASE;
-    }
-    xd[i] -= yd[i];
-  }
-  for (; xd[--len] === 0; )
-    xd.pop();
-  for (; xd[0] === 0; xd.shift())
-    --e;
-  if (!xd[0])
-    return new Ctor(rm === 3 ? -0 : 0);
-  y.d = xd;
-  y.e = getBase10Exponent(xd, e);
-  return external ? finalise(y, pr, rm) : y;
-};
-P.modulo = P.mod = function(y) {
-  var q, x = this, Ctor = x.constructor;
-  y = new Ctor(y);
-  if (!x.d || !y.s || y.d && !y.d[0])
-    return new Ctor(NaN);
-  if (!y.d || x.d && !x.d[0]) {
-    return finalise(new Ctor(x), Ctor.precision, Ctor.rounding);
-  }
-  external = false;
-  if (Ctor.modulo == 9) {
-    q = divide(x, y.abs(), 0, 3, 1);
-    q.s *= y.s;
-  } else {
-    q = divide(x, y, 0, Ctor.modulo, 1);
-  }
-  q = q.times(y);
-  external = true;
-  return x.minus(q);
-};
-P.naturalExponential = P.exp = function() {
-  return naturalExponential(this);
-};
-P.naturalLogarithm = P.ln = function() {
-  return naturalLogarithm(this);
-};
-P.negated = P.neg = function() {
-  var x = new this.constructor(this);
-  x.s = -x.s;
-  return finalise(x);
-};
-P.plus = P.add = function(y) {
-  var carry, d, e, i, k, len, pr, rm, xd, yd, x = this, Ctor = x.constructor;
-  y = new Ctor(y);
-  if (!x.d || !y.d) {
-    if (!x.s || !y.s)
-      y = new Ctor(NaN);
-    else if (!x.d)
-      y = new Ctor(y.d || x.s === y.s ? x : NaN);
-    return y;
-  }
-  if (x.s != y.s) {
-    y.s = -y.s;
-    return x.minus(y);
-  }
-  xd = x.d;
-  yd = y.d;
-  pr = Ctor.precision;
-  rm = Ctor.rounding;
-  if (!xd[0] || !yd[0]) {
-    if (!yd[0])
-      y = new Ctor(x);
-    return external ? finalise(y, pr, rm) : y;
-  }
-  k = mathfloor(x.e / LOG_BASE);
-  e = mathfloor(y.e / LOG_BASE);
-  xd = xd.slice();
-  i = k - e;
-  if (i) {
-    if (i < 0) {
-      d = xd;
-      i = -i;
-      len = yd.length;
-    } else {
-      d = yd;
-      e = k;
-      len = xd.length;
-    }
-    k = Math.ceil(pr / LOG_BASE);
-    len = k > len ? k + 1 : len + 1;
-    if (i > len) {
-      i = len;
-      d.length = 1;
-    }
-    d.reverse();
-    for (; i--; )
-      d.push(0);
-    d.reverse();
-  }
-  len = xd.length;
-  i = yd.length;
-  if (len - i < 0) {
-    i = len;
-    d = yd;
-    yd = xd;
-    xd = d;
-  }
-  for (carry = 0; i; ) {
-    carry = (xd[--i] = xd[i] + yd[i] + carry) / BASE | 0;
-    xd[i] %= BASE;
-  }
-  if (carry) {
-    xd.unshift(carry);
-    ++e;
-  }
-  for (len = xd.length; xd[--len] == 0; )
-    xd.pop();
-  y.d = xd;
-  y.e = getBase10Exponent(xd, e);
-  return external ? finalise(y, pr, rm) : y;
-};
-P.precision = P.sd = function(z) {
-  var k, x = this;
-  if (z !== void 0 && z !== !!z && z !== 1 && z !== 0)
-    throw Error(invalidArgument + z);
-  if (x.d) {
-    k = getPrecision(x.d);
-    if (z && x.e + 1 > k)
-      k = x.e + 1;
-  } else {
-    k = NaN;
-  }
-  return k;
-};
-P.round = function() {
-  var x = this, Ctor = x.constructor;
-  return finalise(new Ctor(x), x.e + 1, Ctor.rounding);
-};
-P.sine = P.sin = function() {
-  var pr, rm, x = this, Ctor = x.constructor;
-  if (!x.isFinite())
-    return new Ctor(NaN);
-  if (x.isZero())
-    return new Ctor(x);
-  pr = Ctor.precision;
-  rm = Ctor.rounding;
-  Ctor.precision = pr + Math.max(x.e, x.sd()) + LOG_BASE;
-  Ctor.rounding = 1;
-  x = sine(Ctor, toLessThanHalfPi(Ctor, x));
-  Ctor.precision = pr;
-  Ctor.rounding = rm;
-  return finalise(quadrant > 2 ? x.neg() : x, pr, rm, true);
-};
-P.squareRoot = P.sqrt = function() {
-  var m, n2, sd, r, rep, t, x = this, d = x.d, e = x.e, s = x.s, Ctor = x.constructor;
-  if (s !== 1 || !d || !d[0]) {
-    return new Ctor(!s || s < 0 && (!d || d[0]) ? NaN : d ? x : 1 / 0);
-  }
-  external = false;
-  s = Math.sqrt(+x);
-  if (s == 0 || s == 1 / 0) {
-    n2 = digitsToString(d);
-    if ((n2.length + e) % 2 == 0)
-      n2 += "0";
-    s = Math.sqrt(n2);
-    e = mathfloor((e + 1) / 2) - (e < 0 || e % 2);
-    if (s == 1 / 0) {
-      n2 = "5e" + e;
-    } else {
-      n2 = s.toExponential();
-      n2 = n2.slice(0, n2.indexOf("e") + 1) + e;
-    }
-    r = new Ctor(n2);
-  } else {
-    r = new Ctor(s.toString());
-  }
-  sd = (e = Ctor.precision) + 3;
-  for (; ; ) {
-    t = r;
-    r = t.plus(divide(x, t, sd + 2, 1)).times(0.5);
-    if (digitsToString(t.d).slice(0, sd) === (n2 = digitsToString(r.d)).slice(0, sd)) {
-      n2 = n2.slice(sd - 3, sd + 1);
-      if (n2 == "9999" || !rep && n2 == "4999") {
-        if (!rep) {
-          finalise(t, e + 1, 0);
-          if (t.times(t).eq(x)) {
-            r = t;
-            break;
-          }
-        }
-        sd += 4;
-        rep = 1;
-      } else {
-        if (!+n2 || !+n2.slice(1) && n2.charAt(0) == "5") {
-          finalise(r, e + 1, 1);
-          m = !r.times(r).eq(x);
-        }
-        break;
-      }
-    }
-  }
-  external = true;
-  return finalise(r, e, Ctor.rounding, m);
-};
-P.tangent = P.tan = function() {
-  var pr, rm, x = this, Ctor = x.constructor;
-  if (!x.isFinite())
-    return new Ctor(NaN);
-  if (x.isZero())
-    return new Ctor(x);
-  pr = Ctor.precision;
-  rm = Ctor.rounding;
-  Ctor.precision = pr + 10;
-  Ctor.rounding = 1;
-  x = x.sin();
-  x.s = 1;
-  x = divide(x, new Ctor(1).minus(x.times(x)).sqrt(), pr + 10, 0);
-  Ctor.precision = pr;
-  Ctor.rounding = rm;
-  return finalise(quadrant == 2 || quadrant == 4 ? x.neg() : x, pr, rm, true);
-};
-P.times = P.mul = function(y) {
-  var carry, e, i, k, r, rL, t, xdL, ydL, x = this, Ctor = x.constructor, xd = x.d, yd = (y = new Ctor(y)).d;
-  y.s *= x.s;
-  if (!xd || !xd[0] || !yd || !yd[0]) {
-    return new Ctor(!y.s || xd && !xd[0] && !yd || yd && !yd[0] && !xd ? NaN : !xd || !yd ? y.s / 0 : y.s * 0);
-  }
-  e = mathfloor(x.e / LOG_BASE) + mathfloor(y.e / LOG_BASE);
-  xdL = xd.length;
-  ydL = yd.length;
-  if (xdL < ydL) {
-    r = xd;
-    xd = yd;
-    yd = r;
-    rL = xdL;
-    xdL = ydL;
-    ydL = rL;
-  }
-  r = [];
-  rL = xdL + ydL;
-  for (i = rL; i--; )
-    r.push(0);
-  for (i = ydL; --i >= 0; ) {
-    carry = 0;
-    for (k = xdL + i; k > i; ) {
-      t = r[k] + yd[i] * xd[k - i - 1] + carry;
-      r[k--] = t % BASE | 0;
-      carry = t / BASE | 0;
-    }
-    r[k] = (r[k] + carry) % BASE | 0;
-  }
-  for (; !r[--rL]; )
-    r.pop();
-  if (carry)
-    ++e;
-  else
-    r.shift();
-  y.d = r;
-  y.e = getBase10Exponent(r, e);
-  return external ? finalise(y, Ctor.precision, Ctor.rounding) : y;
-};
-P.toBinary = function(sd, rm) {
-  return toStringBinary(this, 2, sd, rm);
-};
-P.toDecimalPlaces = P.toDP = function(dp, rm) {
-  var x = this, Ctor = x.constructor;
-  x = new Ctor(x);
-  if (dp === void 0)
-    return x;
-  checkInt32(dp, 0, MAX_DIGITS);
-  if (rm === void 0)
-    rm = Ctor.rounding;
-  else
-    checkInt32(rm, 0, 8);
-  return finalise(x, dp + x.e + 1, rm);
-};
-P.toExponential = function(dp, rm) {
-  var str, x = this, Ctor = x.constructor;
-  if (dp === void 0) {
-    str = finiteToString(x, true);
-  } else {
-    checkInt32(dp, 0, MAX_DIGITS);
-    if (rm === void 0)
-      rm = Ctor.rounding;
-    else
-      checkInt32(rm, 0, 8);
-    x = finalise(new Ctor(x), dp + 1, rm);
-    str = finiteToString(x, true, dp + 1);
-  }
-  return x.isNeg() && !x.isZero() ? "-" + str : str;
-};
-P.toFixed = function(dp, rm) {
-  var str, y, x = this, Ctor = x.constructor;
-  if (dp === void 0) {
-    str = finiteToString(x);
-  } else {
-    checkInt32(dp, 0, MAX_DIGITS);
-    if (rm === void 0)
-      rm = Ctor.rounding;
-    else
-      checkInt32(rm, 0, 8);
-    y = finalise(new Ctor(x), dp + x.e + 1, rm);
-    str = finiteToString(y, false, dp + y.e + 1);
-  }
-  return x.isNeg() && !x.isZero() ? "-" + str : str;
-};
-P.toFraction = function(maxD) {
-  var d, d0, d1, d2, e, k, n2, n0, n1, pr, q, r, x = this, xd = x.d, Ctor = x.constructor;
-  if (!xd)
-    return new Ctor(x);
-  n1 = d0 = new Ctor(1);
-  d1 = n0 = new Ctor(0);
-  d = new Ctor(d1);
-  e = d.e = getPrecision(xd) - x.e - 1;
-  k = e % LOG_BASE;
-  d.d[0] = mathpow(10, k < 0 ? LOG_BASE + k : k);
-  if (maxD == null) {
-    maxD = e > 0 ? d : n1;
-  } else {
-    n2 = new Ctor(maxD);
-    if (!n2.isInt() || n2.lt(n1))
-      throw Error(invalidArgument + n2);
-    maxD = n2.gt(d) ? e > 0 ? d : n1 : n2;
-  }
-  external = false;
-  n2 = new Ctor(digitsToString(xd));
-  pr = Ctor.precision;
-  Ctor.precision = e = xd.length * LOG_BASE * 2;
-  for (; ; ) {
-    q = divide(n2, d, 0, 1, 1);
-    d2 = d0.plus(q.times(d1));
-    if (d2.cmp(maxD) == 1)
-      break;
-    d0 = d1;
-    d1 = d2;
-    d2 = n1;
-    n1 = n0.plus(q.times(d2));
-    n0 = d2;
-    d2 = d;
-    d = n2.minus(q.times(d2));
-    n2 = d2;
-  }
-  d2 = divide(maxD.minus(d0), d1, 0, 1, 1);
-  n0 = n0.plus(d2.times(n1));
-  d0 = d0.plus(d2.times(d1));
-  n0.s = n1.s = x.s;
-  r = divide(n1, d1, e, 1).minus(x).abs().cmp(divide(n0, d0, e, 1).minus(x).abs()) < 1 ? [n1, d1] : [n0, d0];
-  Ctor.precision = pr;
-  external = true;
-  return r;
-};
-P.toHexadecimal = P.toHex = function(sd, rm) {
-  return toStringBinary(this, 16, sd, rm);
-};
-P.toNearest = function(y, rm) {
-  var x = this, Ctor = x.constructor;
-  x = new Ctor(x);
-  if (y == null) {
-    if (!x.d)
-      return x;
-    y = new Ctor(1);
-    rm = Ctor.rounding;
-  } else {
-    y = new Ctor(y);
-    if (rm === void 0) {
-      rm = Ctor.rounding;
-    } else {
-      checkInt32(rm, 0, 8);
-    }
-    if (!x.d)
-      return y.s ? x : y;
-    if (!y.d) {
-      if (y.s)
-        y.s = x.s;
-      return y;
-    }
-  }
-  if (y.d[0]) {
-    external = false;
-    x = divide(x, y, 0, rm, 1).times(y);
-    external = true;
-    finalise(x);
-  } else {
-    y.s = x.s;
-    x = y;
-  }
-  return x;
-};
-P.toNumber = function() {
-  return +this;
-};
-P.toOctal = function(sd, rm) {
-  return toStringBinary(this, 8, sd, rm);
-};
-P.toPower = P.pow = function(y) {
-  var e, k, pr, r, rm, s, x = this, Ctor = x.constructor, yn = +(y = new Ctor(y));
-  if (!x.d || !y.d || !x.d[0] || !y.d[0])
-    return new Ctor(mathpow(+x, yn));
-  x = new Ctor(x);
-  if (x.eq(1))
-    return x;
-  pr = Ctor.precision;
-  rm = Ctor.rounding;
-  if (y.eq(1))
-    return finalise(x, pr, rm);
-  e = mathfloor(y.e / LOG_BASE);
-  if (e >= y.d.length - 1 && (k = yn < 0 ? -yn : yn) <= MAX_SAFE_INTEGER) {
-    r = intPow(Ctor, x, k, pr);
-    return y.s < 0 ? new Ctor(1).div(r) : finalise(r, pr, rm);
-  }
-  s = x.s;
-  if (s < 0) {
-    if (e < y.d.length - 1)
-      return new Ctor(NaN);
-    if ((y.d[e] & 1) == 0)
-      s = 1;
-    if (x.e == 0 && x.d[0] == 1 && x.d.length == 1) {
-      x.s = s;
-      return x;
-    }
-  }
-  k = mathpow(+x, yn);
-  e = k == 0 || !isFinite(k) ? mathfloor(yn * (Math.log("0." + digitsToString(x.d)) / Math.LN10 + x.e + 1)) : new Ctor(k + "").e;
-  if (e > Ctor.maxE + 1 || e < Ctor.minE - 1)
-    return new Ctor(e > 0 ? s / 0 : 0);
-  external = false;
-  Ctor.rounding = x.s = 1;
-  k = Math.min(12, (e + "").length);
-  r = naturalExponential(y.times(naturalLogarithm(x, pr + k)), pr);
-  if (r.d) {
-    r = finalise(r, pr + 5, 1);
-    if (checkRoundingDigits(r.d, pr, rm)) {
-      e = pr + 10;
-      r = finalise(naturalExponential(y.times(naturalLogarithm(x, e + k)), e), e + 5, 1);
-      if (+digitsToString(r.d).slice(pr + 1, pr + 15) + 1 == 1e14) {
-        r = finalise(r, pr + 1, 0);
-      }
-    }
-  }
-  r.s = s;
-  external = true;
-  Ctor.rounding = rm;
-  return finalise(r, pr, rm);
-};
-P.toPrecision = function(sd, rm) {
-  var str, x = this, Ctor = x.constructor;
-  if (sd === void 0) {
-    str = finiteToString(x, x.e <= Ctor.toExpNeg || x.e >= Ctor.toExpPos);
-  } else {
-    checkInt32(sd, 1, MAX_DIGITS);
-    if (rm === void 0)
-      rm = Ctor.rounding;
-    else
-      checkInt32(rm, 0, 8);
-    x = finalise(new Ctor(x), sd, rm);
-    str = finiteToString(x, sd <= x.e || x.e <= Ctor.toExpNeg, sd);
-  }
-  return x.isNeg() && !x.isZero() ? "-" + str : str;
-};
-P.toSignificantDigits = P.toSD = function(sd, rm) {
-  var x = this, Ctor = x.constructor;
-  if (sd === void 0) {
-    sd = Ctor.precision;
-    rm = Ctor.rounding;
-  } else {
-    checkInt32(sd, 1, MAX_DIGITS);
-    if (rm === void 0)
-      rm = Ctor.rounding;
-    else
-      checkInt32(rm, 0, 8);
-  }
-  return finalise(new Ctor(x), sd, rm);
-};
-P.toString = function() {
-  var x = this, Ctor = x.constructor, str = finiteToString(x, x.e <= Ctor.toExpNeg || x.e >= Ctor.toExpPos);
-  return x.isNeg() && !x.isZero() ? "-" + str : str;
-};
-P.truncated = P.trunc = function() {
-  return finalise(new this.constructor(this), this.e + 1, 1);
-};
-P.valueOf = P.toJSON = function() {
-  var x = this, Ctor = x.constructor, str = finiteToString(x, x.e <= Ctor.toExpNeg || x.e >= Ctor.toExpPos);
-  return x.isNeg() ? "-" + str : str;
-};
-function digitsToString(d) {
-  var i, k, ws, indexOfLastWord = d.length - 1, str = "", w = d[0];
-  if (indexOfLastWord > 0) {
-    str += w;
-    for (i = 1; i < indexOfLastWord; i++) {
-      ws = d[i] + "";
-      k = LOG_BASE - ws.length;
-      if (k)
-        str += getZeroString(k);
-      str += ws;
-    }
-    w = d[i];
-    ws = w + "";
-    k = LOG_BASE - ws.length;
-    if (k)
-      str += getZeroString(k);
-  } else if (w === 0) {
-    return "0";
-  }
-  for (; w % 10 === 0; )
-    w /= 10;
-  return str + w;
-}
-function checkInt32(i, min2, max2) {
-  if (i !== ~~i || i < min2 || i > max2) {
-    throw Error(invalidArgument + i);
-  }
-}
-function checkRoundingDigits(d, i, rm, repeating) {
-  var di, k, r, rd;
-  for (k = d[0]; k >= 10; k /= 10)
-    --i;
-  if (--i < 0) {
-    i += LOG_BASE;
-    di = 0;
-  } else {
-    di = Math.ceil((i + 1) / LOG_BASE);
-    i %= LOG_BASE;
-  }
-  k = mathpow(10, LOG_BASE - i);
-  rd = d[di] % k | 0;
-  if (repeating == null) {
-    if (i < 3) {
-      if (i == 0)
-        rd = rd / 100 | 0;
-      else if (i == 1)
-        rd = rd / 10 | 0;
-      r = rm < 4 && rd == 99999 || rm > 3 && rd == 49999 || rd == 5e4 || rd == 0;
-    } else {
-      r = (rm < 4 && rd + 1 == k || rm > 3 && rd + 1 == k / 2) && (d[di + 1] / k / 100 | 0) == mathpow(10, i - 2) - 1 || (rd == k / 2 || rd == 0) && (d[di + 1] / k / 100 | 0) == 0;
-    }
-  } else {
-    if (i < 4) {
-      if (i == 0)
-        rd = rd / 1e3 | 0;
-      else if (i == 1)
-        rd = rd / 100 | 0;
-      else if (i == 2)
-        rd = rd / 10 | 0;
-      r = (repeating || rm < 4) && rd == 9999 || !repeating && rm > 3 && rd == 4999;
-    } else {
-      r = ((repeating || rm < 4) && rd + 1 == k || !repeating && rm > 3 && rd + 1 == k / 2) && (d[di + 1] / k / 1e3 | 0) == mathpow(10, i - 3) - 1;
-    }
-  }
-  return r;
-}
-function convertBase(str, baseIn, baseOut) {
-  var j, arr = [0], arrL, i = 0, strL = str.length;
-  for (; i < strL; ) {
-    for (arrL = arr.length; arrL--; )
-      arr[arrL] *= baseIn;
-    arr[0] += NUMERALS.indexOf(str.charAt(i++));
-    for (j = 0; j < arr.length; j++) {
-      if (arr[j] > baseOut - 1) {
-        if (arr[j + 1] === void 0)
-          arr[j + 1] = 0;
-        arr[j + 1] += arr[j] / baseOut | 0;
-        arr[j] %= baseOut;
-      }
-    }
-  }
-  return arr.reverse();
-}
-function cosine(Ctor, x) {
-  var k, len, y;
-  if (x.isZero())
-    return x;
-  len = x.d.length;
-  if (len < 32) {
-    k = Math.ceil(len / 3);
-    y = (1 / tinyPow(4, k)).toString();
-  } else {
-    k = 16;
-    y = "2.3283064365386962890625e-10";
-  }
-  Ctor.precision += k;
-  x = taylorSeries(Ctor, 1, x.times(y), new Ctor(1));
-  for (var i = k; i--; ) {
-    var cos2x = x.times(x);
-    x = cos2x.times(cos2x).minus(cos2x).times(8).plus(1);
-  }
-  Ctor.precision -= k;
-  return x;
-}
-var divide = function() {
-  function multiplyInteger(x, k, base) {
-    var temp, carry = 0, i = x.length;
-    for (x = x.slice(); i--; ) {
-      temp = x[i] * k + carry;
-      x[i] = temp % base | 0;
-      carry = temp / base | 0;
-    }
-    if (carry)
-      x.unshift(carry);
-    return x;
-  }
-  function compare(a, b2, aL, bL) {
-    var i, r;
-    if (aL != bL) {
-      r = aL > bL ? 1 : -1;
-    } else {
-      for (i = r = 0; i < aL; i++) {
-        if (a[i] != b2[i]) {
-          r = a[i] > b2[i] ? 1 : -1;
-          break;
-        }
-      }
-    }
-    return r;
-  }
-  function subtract(a, b2, aL, base) {
-    var i = 0;
-    for (; aL--; ) {
-      a[aL] -= i;
-      i = a[aL] < b2[aL] ? 1 : 0;
-      a[aL] = i * base + a[aL] - b2[aL];
-    }
-    for (; !a[0] && a.length > 1; )
-      a.shift();
-  }
-  return function(x, y, pr, rm, dp, base) {
-    var cmp, e, i, k, logBase, more, prod, prodL, q, qd, rem, remL, rem0, sd, t, xi, xL, yd0, yL, yz, Ctor = x.constructor, sign2 = x.s == y.s ? 1 : -1, xd = x.d, yd = y.d;
-    if (!xd || !xd[0] || !yd || !yd[0]) {
-      return new Ctor(
-        // Return NaN if either NaN, or both Infinity or 0.
-        !x.s || !y.s || (xd ? yd && xd[0] == yd[0] : !yd) ? NaN : (
-          // Return ±0 if x is 0 or y is ±Infinity, or return ±Infinity as y is 0.
-          xd && xd[0] == 0 || !yd ? sign2 * 0 : sign2 / 0
-        )
-      );
-    }
-    if (base) {
-      logBase = 1;
-      e = x.e - y.e;
-    } else {
-      base = BASE;
-      logBase = LOG_BASE;
-      e = mathfloor(x.e / logBase) - mathfloor(y.e / logBase);
-    }
-    yL = yd.length;
-    xL = xd.length;
-    q = new Ctor(sign2);
-    qd = q.d = [];
-    for (i = 0; yd[i] == (xd[i] || 0); i++)
-      ;
-    if (yd[i] > (xd[i] || 0))
-      e--;
-    if (pr == null) {
-      sd = pr = Ctor.precision;
-      rm = Ctor.rounding;
-    } else if (dp) {
-      sd = pr + (x.e - y.e) + 1;
-    } else {
-      sd = pr;
-    }
-    if (sd < 0) {
-      qd.push(1);
-      more = true;
-    } else {
-      sd = sd / logBase + 2 | 0;
-      i = 0;
-      if (yL == 1) {
-        k = 0;
-        yd = yd[0];
-        sd++;
-        for (; (i < xL || k) && sd--; i++) {
-          t = k * base + (xd[i] || 0);
-          qd[i] = t / yd | 0;
-          k = t % yd | 0;
-        }
-        more = k || i < xL;
-      } else {
-        k = base / (yd[0] + 1) | 0;
-        if (k > 1) {
-          yd = multiplyInteger(yd, k, base);
-          xd = multiplyInteger(xd, k, base);
-          yL = yd.length;
-          xL = xd.length;
-        }
-        xi = yL;
-        rem = xd.slice(0, yL);
-        remL = rem.length;
-        for (; remL < yL; )
-          rem[remL++] = 0;
-        yz = yd.slice();
-        yz.unshift(0);
-        yd0 = yd[0];
-        if (yd[1] >= base / 2)
-          ++yd0;
-        do {
-          k = 0;
-          cmp = compare(yd, rem, yL, remL);
-          if (cmp < 0) {
-            rem0 = rem[0];
-            if (yL != remL)
-              rem0 = rem0 * base + (rem[1] || 0);
-            k = rem0 / yd0 | 0;
-            if (k > 1) {
-              if (k >= base)
-                k = base - 1;
-              prod = multiplyInteger(yd, k, base);
-              prodL = prod.length;
-              remL = rem.length;
-              cmp = compare(prod, rem, prodL, remL);
-              if (cmp == 1) {
-                k--;
-                subtract(prod, yL < prodL ? yz : yd, prodL, base);
-              }
-            } else {
-              if (k == 0)
-                cmp = k = 1;
-              prod = yd.slice();
-            }
-            prodL = prod.length;
-            if (prodL < remL)
-              prod.unshift(0);
-            subtract(rem, prod, remL, base);
-            if (cmp == -1) {
-              remL = rem.length;
-              cmp = compare(yd, rem, yL, remL);
-              if (cmp < 1) {
-                k++;
-                subtract(rem, yL < remL ? yz : yd, remL, base);
-              }
-            }
-            remL = rem.length;
-          } else if (cmp === 0) {
-            k++;
-            rem = [0];
-          }
-          qd[i++] = k;
-          if (cmp && rem[0]) {
-            rem[remL++] = xd[xi] || 0;
-          } else {
-            rem = [xd[xi]];
-            remL = 1;
-          }
-        } while ((xi++ < xL || rem[0] !== void 0) && sd--);
-        more = rem[0] !== void 0;
-      }
-      if (!qd[0])
-        qd.shift();
-    }
-    if (logBase == 1) {
-      q.e = e;
-      inexact = more;
-    } else {
-      for (i = 1, k = qd[0]; k >= 10; k /= 10)
-        i++;
-      q.e = i + e * logBase - 1;
-      finalise(q, dp ? pr + q.e + 1 : pr, rm, more);
-    }
-    return q;
-  };
-}();
-function finalise(x, sd, rm, isTruncated) {
-  var digits, i, j, k, rd, roundUp, w, xd, xdi, Ctor = x.constructor;
-  out:
-    if (sd != null) {
-      xd = x.d;
-      if (!xd)
-        return x;
-      for (digits = 1, k = xd[0]; k >= 10; k /= 10)
-        digits++;
-      i = sd - digits;
-      if (i < 0) {
-        i += LOG_BASE;
-        j = sd;
-        w = xd[xdi = 0];
-        rd = w / mathpow(10, digits - j - 1) % 10 | 0;
-      } else {
-        xdi = Math.ceil((i + 1) / LOG_BASE);
-        k = xd.length;
-        if (xdi >= k) {
-          if (isTruncated) {
-            for (; k++ <= xdi; )
-              xd.push(0);
-            w = rd = 0;
-            digits = 1;
-            i %= LOG_BASE;
-            j = i - LOG_BASE + 1;
-          } else {
-            break out;
-          }
-        } else {
-          w = k = xd[xdi];
-          for (digits = 1; k >= 10; k /= 10)
-            digits++;
-          i %= LOG_BASE;
-          j = i - LOG_BASE + digits;
-          rd = j < 0 ? 0 : w / mathpow(10, digits - j - 1) % 10 | 0;
-        }
-      }
-      isTruncated = isTruncated || sd < 0 || xd[xdi + 1] !== void 0 || (j < 0 ? w : w % mathpow(10, digits - j - 1));
-      roundUp = rm < 4 ? (rd || isTruncated) && (rm == 0 || rm == (x.s < 0 ? 3 : 2)) : rd > 5 || rd == 5 && (rm == 4 || isTruncated || rm == 6 && // Check whether the digit to the left of the rounding digit is odd.
-      (i > 0 ? j > 0 ? w / mathpow(10, digits - j) : 0 : xd[xdi - 1]) % 10 & 1 || rm == (x.s < 0 ? 8 : 7));
-      if (sd < 1 || !xd[0]) {
-        xd.length = 0;
-        if (roundUp) {
-          sd -= x.e + 1;
-          xd[0] = mathpow(10, (LOG_BASE - sd % LOG_BASE) % LOG_BASE);
-          x.e = -sd || 0;
-        } else {
-          xd[0] = x.e = 0;
-        }
-        return x;
-      }
-      if (i == 0) {
-        xd.length = xdi;
-        k = 1;
-        xdi--;
-      } else {
-        xd.length = xdi + 1;
-        k = mathpow(10, LOG_BASE - i);
-        xd[xdi] = j > 0 ? (w / mathpow(10, digits - j) % mathpow(10, j) | 0) * k : 0;
-      }
-      if (roundUp) {
-        for (; ; ) {
-          if (xdi == 0) {
-            for (i = 1, j = xd[0]; j >= 10; j /= 10)
-              i++;
-            j = xd[0] += k;
-            for (k = 1; j >= 10; j /= 10)
-              k++;
-            if (i != k) {
-              x.e++;
-              if (xd[0] == BASE)
-                xd[0] = 1;
-            }
-            break;
-          } else {
-            xd[xdi] += k;
-            if (xd[xdi] != BASE)
-              break;
-            xd[xdi--] = 0;
-            k = 1;
-          }
-        }
-      }
-      for (i = xd.length; xd[--i] === 0; )
-        xd.pop();
-    }
-  if (external) {
-    if (x.e > Ctor.maxE) {
-      x.d = null;
-      x.e = NaN;
-    } else if (x.e < Ctor.minE) {
-      x.e = 0;
-      x.d = [0];
-    }
-  }
-  return x;
-}
-function finiteToString(x, isExp, sd) {
-  if (!x.isFinite())
-    return nonFiniteToString(x);
-  var k, e = x.e, str = digitsToString(x.d), len = str.length;
-  if (isExp) {
-    if (sd && (k = sd - len) > 0) {
-      str = str.charAt(0) + "." + str.slice(1) + getZeroString(k);
-    } else if (len > 1) {
-      str = str.charAt(0) + "." + str.slice(1);
-    }
-    str = str + (x.e < 0 ? "e" : "e+") + x.e;
-  } else if (e < 0) {
-    str = "0." + getZeroString(-e - 1) + str;
-    if (sd && (k = sd - len) > 0)
-      str += getZeroString(k);
-  } else if (e >= len) {
-    str += getZeroString(e + 1 - len);
-    if (sd && (k = sd - e - 1) > 0)
-      str = str + "." + getZeroString(k);
-  } else {
-    if ((k = e + 1) < len)
-      str = str.slice(0, k) + "." + str.slice(k);
-    if (sd && (k = sd - len) > 0) {
-      if (e + 1 === len)
-        str += ".";
-      str += getZeroString(k);
-    }
-  }
-  return str;
-}
-function getBase10Exponent(digits, e) {
-  var w = digits[0];
-  for (e *= LOG_BASE; w >= 10; w /= 10)
-    e++;
-  return e;
-}
-function getLn10(Ctor, sd, pr) {
-  if (sd > LN10_PRECISION) {
-    external = true;
-    if (pr)
-      Ctor.precision = pr;
-    throw Error(precisionLimitExceeded);
-  }
-  return finalise(new Ctor(LN10), sd, 1, true);
-}
-function getPi(Ctor, sd, rm) {
-  if (sd > PI_PRECISION)
-    throw Error(precisionLimitExceeded);
-  return finalise(new Ctor(PI), sd, rm, true);
-}
-function getPrecision(digits) {
-  var w = digits.length - 1, len = w * LOG_BASE + 1;
-  w = digits[w];
-  if (w) {
-    for (; w % 10 == 0; w /= 10)
-      len--;
-    for (w = digits[0]; w >= 10; w /= 10)
-      len++;
-  }
-  return len;
-}
-function getZeroString(k) {
-  var zs = "";
-  for (; k--; )
-    zs += "0";
-  return zs;
-}
-function intPow(Ctor, x, n2, pr) {
-  var isTruncated, r = new Ctor(1), k = Math.ceil(pr / LOG_BASE + 4);
-  external = false;
-  for (; ; ) {
-    if (n2 % 2) {
-      r = r.times(x);
-      if (truncate(r.d, k))
-        isTruncated = true;
-    }
-    n2 = mathfloor(n2 / 2);
-    if (n2 === 0) {
-      n2 = r.d.length - 1;
-      if (isTruncated && r.d[n2] === 0)
-        ++r.d[n2];
-      break;
-    }
-    x = x.times(x);
-    truncate(x.d, k);
-  }
-  external = true;
-  return r;
-}
-function isOdd(n2) {
-  return n2.d[n2.d.length - 1] & 1;
-}
-function maxOrMin(Ctor, args, n2) {
-  var k, y, x = new Ctor(args[0]), i = 0;
-  for (; ++i < args.length; ) {
-    y = new Ctor(args[i]);
-    if (!y.s) {
-      x = y;
-      break;
-    }
-    k = x.cmp(y);
-    if (k === n2 || k === 0 && x.s === n2) {
-      x = y;
-    }
-  }
-  return x;
-}
-function naturalExponential(x, sd) {
-  var denominator, guard, j, pow2, sum2, t, wpr, rep = 0, i = 0, k = 0, Ctor = x.constructor, rm = Ctor.rounding, pr = Ctor.precision;
-  if (!x.d || !x.d[0] || x.e > 17) {
-    return new Ctor(x.d ? !x.d[0] ? 1 : x.s < 0 ? 0 : 1 / 0 : x.s ? x.s < 0 ? 0 : x : 0 / 0);
-  }
-  if (sd == null) {
-    external = false;
-    wpr = pr;
-  } else {
-    wpr = sd;
-  }
-  t = new Ctor(0.03125);
-  while (x.e > -2) {
-    x = x.times(t);
-    k += 5;
-  }
-  guard = Math.log(mathpow(2, k)) / Math.LN10 * 2 + 5 | 0;
-  wpr += guard;
-  denominator = pow2 = sum2 = new Ctor(1);
-  Ctor.precision = wpr;
-  for (; ; ) {
-    pow2 = finalise(pow2.times(x), wpr, 1);
-    denominator = denominator.times(++i);
-    t = sum2.plus(divide(pow2, denominator, wpr, 1));
-    if (digitsToString(t.d).slice(0, wpr) === digitsToString(sum2.d).slice(0, wpr)) {
-      j = k;
-      while (j--)
-        sum2 = finalise(sum2.times(sum2), wpr, 1);
-      if (sd == null) {
-        if (rep < 3 && checkRoundingDigits(sum2.d, wpr - guard, rm, rep)) {
-          Ctor.precision = wpr += 10;
-          denominator = pow2 = t = new Ctor(1);
-          i = 0;
-          rep++;
-        } else {
-          return finalise(sum2, Ctor.precision = pr, rm, external = true);
-        }
-      } else {
-        Ctor.precision = pr;
-        return sum2;
-      }
-    }
-    sum2 = t;
-  }
-}
-function naturalLogarithm(y, sd) {
-  var c, c0, denominator, e, numerator, rep, sum2, t, wpr, x1, x2, n2 = 1, guard = 10, x = y, xd = x.d, Ctor = x.constructor, rm = Ctor.rounding, pr = Ctor.precision;
-  if (x.s < 0 || !xd || !xd[0] || !x.e && xd[0] == 1 && xd.length == 1) {
-    return new Ctor(xd && !xd[0] ? -1 / 0 : x.s != 1 ? NaN : xd ? 0 : x);
-  }
-  if (sd == null) {
-    external = false;
-    wpr = pr;
-  } else {
-    wpr = sd;
-  }
-  Ctor.precision = wpr += guard;
-  c = digitsToString(xd);
-  c0 = c.charAt(0);
-  if (Math.abs(e = x.e) < 15e14) {
-    while (c0 < 7 && c0 != 1 || c0 == 1 && c.charAt(1) > 3) {
-      x = x.times(y);
-      c = digitsToString(x.d);
-      c0 = c.charAt(0);
-      n2++;
-    }
-    e = x.e;
-    if (c0 > 1) {
-      x = new Ctor("0." + c);
-      e++;
-    } else {
-      x = new Ctor(c0 + "." + c.slice(1));
-    }
-  } else {
-    t = getLn10(Ctor, wpr + 2, pr).times(e + "");
-    x = naturalLogarithm(new Ctor(c0 + "." + c.slice(1)), wpr - guard).plus(t);
-    Ctor.precision = pr;
-    return sd == null ? finalise(x, pr, rm, external = true) : x;
-  }
-  x1 = x;
-  sum2 = numerator = x = divide(x.minus(1), x.plus(1), wpr, 1);
-  x2 = finalise(x.times(x), wpr, 1);
-  denominator = 3;
-  for (; ; ) {
-    numerator = finalise(numerator.times(x2), wpr, 1);
-    t = sum2.plus(divide(numerator, new Ctor(denominator), wpr, 1));
-    if (digitsToString(t.d).slice(0, wpr) === digitsToString(sum2.d).slice(0, wpr)) {
-      sum2 = sum2.times(2);
-      if (e !== 0)
-        sum2 = sum2.plus(getLn10(Ctor, wpr + 2, pr).times(e + ""));
-      sum2 = divide(sum2, new Ctor(n2), wpr, 1);
-      if (sd == null) {
-        if (checkRoundingDigits(sum2.d, wpr - guard, rm, rep)) {
-          Ctor.precision = wpr += guard;
-          t = numerator = x = divide(x1.minus(1), x1.plus(1), wpr, 1);
-          x2 = finalise(x.times(x), wpr, 1);
-          denominator = rep = 1;
-        } else {
-          return finalise(sum2, Ctor.precision = pr, rm, external = true);
-        }
-      } else {
-        Ctor.precision = pr;
-        return sum2;
-      }
-    }
-    sum2 = t;
-    denominator += 2;
-  }
-}
-function nonFiniteToString(x) {
-  return String(x.s * x.s / 0);
-}
-function parseDecimal(x, str) {
-  var e, i, len;
-  if ((e = str.indexOf(".")) > -1)
-    str = str.replace(".", "");
-  if ((i = str.search(/e/i)) > 0) {
-    if (e < 0)
-      e = i;
-    e += +str.slice(i + 1);
-    str = str.substring(0, i);
-  } else if (e < 0) {
-    e = str.length;
-  }
-  for (i = 0; str.charCodeAt(i) === 48; i++)
-    ;
-  for (len = str.length; str.charCodeAt(len - 1) === 48; --len)
-    ;
-  str = str.slice(i, len);
-  if (str) {
-    len -= i;
-    x.e = e = e - i - 1;
-    x.d = [];
-    i = (e + 1) % LOG_BASE;
-    if (e < 0)
-      i += LOG_BASE;
-    if (i < len) {
-      if (i)
-        x.d.push(+str.slice(0, i));
-      for (len -= LOG_BASE; i < len; )
-        x.d.push(+str.slice(i, i += LOG_BASE));
-      str = str.slice(i);
-      i = LOG_BASE - str.length;
-    } else {
-      i -= len;
-    }
-    for (; i--; )
-      str += "0";
-    x.d.push(+str);
-    if (external) {
-      if (x.e > x.constructor.maxE) {
-        x.d = null;
-        x.e = NaN;
-      } else if (x.e < x.constructor.minE) {
-        x.e = 0;
-        x.d = [0];
-      }
-    }
-  } else {
-    x.e = 0;
-    x.d = [0];
-  }
-  return x;
-}
-function parseOther(x, str) {
-  var base, Ctor, divisor, i, isFloat, len, p, xd, xe;
-  if (str.indexOf("_") > -1) {
-    str = str.replace(/(\d)_(?=\d)/g, "$1");
-    if (isDecimal.test(str))
-      return parseDecimal(x, str);
-  } else if (str === "Infinity" || str === "NaN") {
-    if (!+str)
-      x.s = NaN;
-    x.e = NaN;
-    x.d = null;
-    return x;
-  }
-  if (isHex.test(str)) {
-    base = 16;
-    str = str.toLowerCase();
-  } else if (isBinary.test(str)) {
-    base = 2;
-  } else if (isOctal.test(str)) {
-    base = 8;
-  } else {
-    throw Error(invalidArgument + str);
-  }
-  i = str.search(/p/i);
-  if (i > 0) {
-    p = +str.slice(i + 1);
-    str = str.substring(2, i);
-  } else {
-    str = str.slice(2);
-  }
-  i = str.indexOf(".");
-  isFloat = i >= 0;
-  Ctor = x.constructor;
-  if (isFloat) {
-    str = str.replace(".", "");
-    len = str.length;
-    i = len - i;
-    divisor = intPow(Ctor, new Ctor(base), i, i * 2);
-  }
-  xd = convertBase(str, base, BASE);
-  xe = xd.length - 1;
-  for (i = xe; xd[i] === 0; --i)
-    xd.pop();
-  if (i < 0)
-    return new Ctor(x.s * 0);
-  x.e = getBase10Exponent(xd, xe);
-  x.d = xd;
-  external = false;
-  if (isFloat)
-    x = divide(x, divisor, len * 4);
-  if (p)
-    x = x.times(Math.abs(p) < 54 ? mathpow(2, p) : Decimal.pow(2, p));
-  external = true;
-  return x;
-}
-function sine(Ctor, x) {
-  var k, len = x.d.length;
-  if (len < 3) {
-    return x.isZero() ? x : taylorSeries(Ctor, 2, x, x);
-  }
-  k = 1.4 * Math.sqrt(len);
-  k = k > 16 ? 16 : k | 0;
-  x = x.times(1 / tinyPow(5, k));
-  x = taylorSeries(Ctor, 2, x, x);
-  var sin2_x, d5 = new Ctor(5), d16 = new Ctor(16), d20 = new Ctor(20);
-  for (; k--; ) {
-    sin2_x = x.times(x);
-    x = x.times(d5.plus(sin2_x.times(d16.times(sin2_x).minus(d20))));
-  }
-  return x;
-}
-function taylorSeries(Ctor, n2, x, y, isHyperbolic) {
-  var j, t, u, x2, i = 1, pr = Ctor.precision, k = Math.ceil(pr / LOG_BASE);
-  external = false;
-  x2 = x.times(x);
-  u = new Ctor(y);
-  for (; ; ) {
-    t = divide(u.times(x2), new Ctor(n2++ * n2++), pr, 1);
-    u = isHyperbolic ? y.plus(t) : y.minus(t);
-    y = divide(t.times(x2), new Ctor(n2++ * n2++), pr, 1);
-    t = u.plus(y);
-    if (t.d[k] !== void 0) {
-      for (j = k; t.d[j] === u.d[j] && j--; )
-        ;
-      if (j == -1)
-        break;
-    }
-    j = u;
-    u = y;
-    y = t;
-    t = j;
-    i++;
-  }
-  external = true;
-  t.d.length = k + 1;
-  return t;
-}
-function tinyPow(b2, e) {
-  var n2 = b2;
-  while (--e)
-    n2 *= b2;
-  return n2;
-}
-function toLessThanHalfPi(Ctor, x) {
-  var t, isNeg = x.s < 0, pi = getPi(Ctor, Ctor.precision, 1), halfPi = pi.times(0.5);
-  x = x.abs();
-  if (x.lte(halfPi)) {
-    quadrant = isNeg ? 4 : 1;
-    return x;
-  }
-  t = x.divToInt(pi);
-  if (t.isZero()) {
-    quadrant = isNeg ? 3 : 2;
-  } else {
-    x = x.minus(t.times(pi));
-    if (x.lte(halfPi)) {
-      quadrant = isOdd(t) ? isNeg ? 2 : 3 : isNeg ? 4 : 1;
-      return x;
-    }
-    quadrant = isOdd(t) ? isNeg ? 1 : 4 : isNeg ? 3 : 2;
-  }
-  return x.minus(pi).abs();
-}
-function toStringBinary(x, baseOut, sd, rm) {
-  var base, e, i, k, len, roundUp, str, xd, y, Ctor = x.constructor, isExp = sd !== void 0;
-  if (isExp) {
-    checkInt32(sd, 1, MAX_DIGITS);
-    if (rm === void 0)
-      rm = Ctor.rounding;
-    else
-      checkInt32(rm, 0, 8);
-  } else {
-    sd = Ctor.precision;
-    rm = Ctor.rounding;
-  }
-  if (!x.isFinite()) {
-    str = nonFiniteToString(x);
-  } else {
-    str = finiteToString(x);
-    i = str.indexOf(".");
-    if (isExp) {
-      base = 2;
-      if (baseOut == 16) {
-        sd = sd * 4 - 3;
-      } else if (baseOut == 8) {
-        sd = sd * 3 - 2;
-      }
-    } else {
-      base = baseOut;
-    }
-    if (i >= 0) {
-      str = str.replace(".", "");
-      y = new Ctor(1);
-      y.e = str.length - i;
-      y.d = convertBase(finiteToString(y), 10, base);
-      y.e = y.d.length;
-    }
-    xd = convertBase(str, 10, base);
-    e = len = xd.length;
-    for (; xd[--len] == 0; )
-      xd.pop();
-    if (!xd[0]) {
-      str = isExp ? "0p+0" : "0";
-    } else {
-      if (i < 0) {
-        e--;
-      } else {
-        x = new Ctor(x);
-        x.d = xd;
-        x.e = e;
-        x = divide(x, y, sd, rm, 0, base);
-        xd = x.d;
-        e = x.e;
-        roundUp = inexact;
-      }
-      i = xd[sd];
-      k = base / 2;
-      roundUp = roundUp || xd[sd + 1] !== void 0;
-      roundUp = rm < 4 ? (i !== void 0 || roundUp) && (rm === 0 || rm === (x.s < 0 ? 3 : 2)) : i > k || i === k && (rm === 4 || roundUp || rm === 6 && xd[sd - 1] & 1 || rm === (x.s < 0 ? 8 : 7));
-      xd.length = sd;
-      if (roundUp) {
-        for (; ++xd[--sd] > base - 1; ) {
-          xd[sd] = 0;
-          if (!sd) {
-            ++e;
-            xd.unshift(1);
-          }
-        }
-      }
-      for (len = xd.length; !xd[len - 1]; --len)
-        ;
-      for (i = 0, str = ""; i < len; i++)
-        str += NUMERALS.charAt(xd[i]);
-      if (isExp) {
-        if (len > 1) {
-          if (baseOut == 16 || baseOut == 8) {
-            i = baseOut == 16 ? 4 : 3;
-            for (--len; len % i; len++)
-              str += "0";
-            xd = convertBase(str, base, baseOut);
-            for (len = xd.length; !xd[len - 1]; --len)
-              ;
-            for (i = 1, str = "1."; i < len; i++)
-              str += NUMERALS.charAt(xd[i]);
-          } else {
-            str = str.charAt(0) + "." + str.slice(1);
-          }
-        }
-        str = str + (e < 0 ? "p" : "p+") + e;
-      } else if (e < 0) {
-        for (; ++e; )
-          str = "0" + str;
-        str = "0." + str;
-      } else {
-        if (++e > len)
-          for (e -= len; e--; )
-            str += "0";
-        else if (e < len)
-          str = str.slice(0, e) + "." + str.slice(e);
-      }
-    }
-    str = (baseOut == 16 ? "0x" : baseOut == 2 ? "0b" : baseOut == 8 ? "0o" : "") + str;
-  }
-  return x.s < 0 ? "-" + str : str;
-}
-function truncate(arr, len) {
-  if (arr.length > len) {
-    arr.length = len;
-    return true;
-  }
-}
-function abs(x) {
-  return new this(x).abs();
-}
-function acos(x) {
-  return new this(x).acos();
-}
-function acosh(x) {
-  return new this(x).acosh();
-}
-function add(x, y) {
-  return new this(x).plus(y);
-}
-function asin(x) {
-  return new this(x).asin();
-}
-function asinh(x) {
-  return new this(x).asinh();
-}
-function atan(x) {
-  return new this(x).atan();
-}
-function atanh(x) {
-  return new this(x).atanh();
-}
-function atan2(y, x) {
-  y = new this(y);
-  x = new this(x);
-  var r, pr = this.precision, rm = this.rounding, wpr = pr + 4;
-  if (!y.s || !x.s) {
-    r = new this(NaN);
-  } else if (!y.d && !x.d) {
-    r = getPi(this, wpr, 1).times(x.s > 0 ? 0.25 : 0.75);
-    r.s = y.s;
-  } else if (!x.d || y.isZero()) {
-    r = x.s < 0 ? getPi(this, pr, rm) : new this(0);
-    r.s = y.s;
-  } else if (!y.d || x.isZero()) {
-    r = getPi(this, wpr, 1).times(0.5);
-    r.s = y.s;
-  } else if (x.s < 0) {
-    this.precision = wpr;
-    this.rounding = 1;
-    r = this.atan(divide(y, x, wpr, 1));
-    x = getPi(this, wpr, 1);
-    this.precision = pr;
-    this.rounding = rm;
-    r = y.s < 0 ? r.minus(x) : r.plus(x);
-  } else {
-    r = this.atan(divide(y, x, wpr, 1));
-  }
-  return r;
-}
-function cbrt(x) {
-  return new this(x).cbrt();
-}
-function ceil(x) {
-  return finalise(x = new this(x), x.e + 1, 2);
-}
-function clamp(x, min2, max2) {
-  return new this(x).clamp(min2, max2);
-}
-function config(obj) {
-  if (!obj || typeof obj !== "object")
-    throw Error(decimalError + "Object expected");
-  var i, p, v, useDefaults = obj.defaults === true, ps = [
-    "precision",
-    1,
-    MAX_DIGITS,
-    "rounding",
-    0,
-    8,
-    "toExpNeg",
-    -EXP_LIMIT,
-    0,
-    "toExpPos",
-    0,
-    EXP_LIMIT,
-    "maxE",
-    0,
-    EXP_LIMIT,
-    "minE",
-    -EXP_LIMIT,
-    0,
-    "modulo",
-    0,
-    9
-  ];
-  for (i = 0; i < ps.length; i += 3) {
-    if (p = ps[i], useDefaults)
-      this[p] = DEFAULTS[p];
-    if ((v = obj[p]) !== void 0) {
-      if (mathfloor(v) === v && v >= ps[i + 1] && v <= ps[i + 2])
-        this[p] = v;
-      else
-        throw Error(invalidArgument + p + ": " + v);
-    }
-  }
-  if (p = "crypto", useDefaults)
-    this[p] = DEFAULTS[p];
-  if ((v = obj[p]) !== void 0) {
-    if (v === true || v === false || v === 0 || v === 1) {
-      if (v) {
-        if (typeof crypto != "undefined" && crypto && (crypto.getRandomValues || crypto.randomBytes)) {
-          this[p] = true;
-        } else {
-          throw Error(cryptoUnavailable);
-        }
-      } else {
-        this[p] = false;
-      }
-    } else {
-      throw Error(invalidArgument + p + ": " + v);
-    }
-  }
-  return this;
-}
-function cos(x) {
-  return new this(x).cos();
-}
-function cosh(x) {
-  return new this(x).cosh();
-}
-function clone(obj) {
-  var i, p, ps;
-  function Decimal2(v) {
-    var e, i2, t, x = this;
-    if (!(x instanceof Decimal2))
-      return new Decimal2(v);
-    x.constructor = Decimal2;
-    if (isDecimalInstance(v)) {
-      x.s = v.s;
-      if (external) {
-        if (!v.d || v.e > Decimal2.maxE) {
-          x.e = NaN;
-          x.d = null;
-        } else if (v.e < Decimal2.minE) {
-          x.e = 0;
-          x.d = [0];
-        } else {
-          x.e = v.e;
-          x.d = v.d.slice();
-        }
-      } else {
-        x.e = v.e;
-        x.d = v.d ? v.d.slice() : v.d;
-      }
-      return;
-    }
-    t = typeof v;
-    if (t === "number") {
-      if (v === 0) {
-        x.s = 1 / v < 0 ? -1 : 1;
-        x.e = 0;
-        x.d = [0];
-        return;
-      }
-      if (v < 0) {
-        v = -v;
-        x.s = -1;
-      } else {
-        x.s = 1;
-      }
-      if (v === ~~v && v < 1e7) {
-        for (e = 0, i2 = v; i2 >= 10; i2 /= 10)
-          e++;
-        if (external) {
-          if (e > Decimal2.maxE) {
-            x.e = NaN;
-            x.d = null;
-          } else if (e < Decimal2.minE) {
-            x.e = 0;
-            x.d = [0];
-          } else {
-            x.e = e;
-            x.d = [v];
-          }
-        } else {
-          x.e = e;
-          x.d = [v];
-        }
-        return;
-      }
-      if (v * 0 !== 0) {
-        if (!v)
-          x.s = NaN;
-        x.e = NaN;
-        x.d = null;
-        return;
-      }
-      return parseDecimal(x, v.toString());
-    }
-    if (t === "string") {
-      if ((i2 = v.charCodeAt(0)) === 45) {
-        v = v.slice(1);
-        x.s = -1;
-      } else {
-        if (i2 === 43)
-          v = v.slice(1);
-        x.s = 1;
-      }
-      return isDecimal.test(v) ? parseDecimal(x, v) : parseOther(x, v);
-    }
-    if (t === "bigint") {
-      if (v < 0) {
-        v = -v;
-        x.s = -1;
-      } else {
-        x.s = 1;
-      }
-      return parseDecimal(x, v.toString());
-    }
-    throw Error(invalidArgument + v);
-  }
-  Decimal2.prototype = P;
-  Decimal2.ROUND_UP = 0;
-  Decimal2.ROUND_DOWN = 1;
-  Decimal2.ROUND_CEIL = 2;
-  Decimal2.ROUND_FLOOR = 3;
-  Decimal2.ROUND_HALF_UP = 4;
-  Decimal2.ROUND_HALF_DOWN = 5;
-  Decimal2.ROUND_HALF_EVEN = 6;
-  Decimal2.ROUND_HALF_CEIL = 7;
-  Decimal2.ROUND_HALF_FLOOR = 8;
-  Decimal2.EUCLID = 9;
-  Decimal2.config = Decimal2.set = config;
-  Decimal2.clone = clone;
-  Decimal2.isDecimal = isDecimalInstance;
-  Decimal2.abs = abs;
-  Decimal2.acos = acos;
-  Decimal2.acosh = acosh;
-  Decimal2.add = add;
-  Decimal2.asin = asin;
-  Decimal2.asinh = asinh;
-  Decimal2.atan = atan;
-  Decimal2.atanh = atanh;
-  Decimal2.atan2 = atan2;
-  Decimal2.cbrt = cbrt;
-  Decimal2.ceil = ceil;
-  Decimal2.clamp = clamp;
-  Decimal2.cos = cos;
-  Decimal2.cosh = cosh;
-  Decimal2.div = div;
-  Decimal2.exp = exp;
-  Decimal2.floor = floor;
-  Decimal2.hypot = hypot;
-  Decimal2.ln = ln;
-  Decimal2.log = log;
-  Decimal2.log10 = log10;
-  Decimal2.log2 = log2;
-  Decimal2.max = max;
-  Decimal2.min = min;
-  Decimal2.mod = mod;
-  Decimal2.mul = mul;
-  Decimal2.pow = pow;
-  Decimal2.random = random;
-  Decimal2.round = round;
-  Decimal2.sign = sign;
-  Decimal2.sin = sin;
-  Decimal2.sinh = sinh;
-  Decimal2.sqrt = sqrt;
-  Decimal2.sub = sub;
-  Decimal2.sum = sum;
-  Decimal2.tan = tan;
-  Decimal2.tanh = tanh;
-  Decimal2.trunc = trunc;
-  if (obj === void 0)
-    obj = {};
-  if (obj) {
-    if (obj.defaults !== true) {
-      ps = ["precision", "rounding", "toExpNeg", "toExpPos", "maxE", "minE", "modulo", "crypto"];
-      for (i = 0; i < ps.length; )
-        if (!obj.hasOwnProperty(p = ps[i++]))
-          obj[p] = this[p];
-    }
-  }
-  Decimal2.config(obj);
-  return Decimal2;
-}
-function div(x, y) {
-  return new this(x).div(y);
-}
-function exp(x) {
-  return new this(x).exp();
-}
-function floor(x) {
-  return finalise(x = new this(x), x.e + 1, 3);
-}
-function hypot() {
-  var i, n2, t = new this(0);
-  external = false;
-  for (i = 0; i < arguments.length; ) {
-    n2 = new this(arguments[i++]);
-    if (!n2.d) {
-      if (n2.s) {
-        external = true;
-        return new this(1 / 0);
-      }
-      t = n2;
-    } else if (t.d) {
-      t = t.plus(n2.times(n2));
-    }
-  }
-  external = true;
-  return t.sqrt();
-}
-function isDecimalInstance(obj) {
-  return obj instanceof Decimal || obj && obj.toStringTag === tag || false;
-}
-function ln(x) {
-  return new this(x).ln();
-}
-function log(x, y) {
-  return new this(x).log(y);
-}
-function log2(x) {
-  return new this(x).log(2);
-}
-function log10(x) {
-  return new this(x).log(10);
-}
-function max() {
-  return maxOrMin(this, arguments, -1);
-}
-function min() {
-  return maxOrMin(this, arguments, 1);
-}
-function mod(x, y) {
-  return new this(x).mod(y);
-}
-function mul(x, y) {
-  return new this(x).mul(y);
-}
-function pow(x, y) {
-  return new this(x).pow(y);
-}
-function random(sd) {
-  var d, e, k, n2, i = 0, r = new this(1), rd = [];
-  if (sd === void 0)
-    sd = this.precision;
-  else
-    checkInt32(sd, 1, MAX_DIGITS);
-  k = Math.ceil(sd / LOG_BASE);
-  if (!this.crypto) {
-    for (; i < k; )
-      rd[i++] = Math.random() * 1e7 | 0;
-  } else if (crypto.getRandomValues) {
-    d = crypto.getRandomValues(new Uint32Array(k));
-    for (; i < k; ) {
-      n2 = d[i];
-      if (n2 >= 429e7) {
-        d[i] = crypto.getRandomValues(new Uint32Array(1))[0];
-      } else {
-        rd[i++] = n2 % 1e7;
-      }
-    }
-  } else if (crypto.randomBytes) {
-    d = crypto.randomBytes(k *= 4);
-    for (; i < k; ) {
-      n2 = d[i] + (d[i + 1] << 8) + (d[i + 2] << 16) + ((d[i + 3] & 127) << 24);
-      if (n2 >= 214e7) {
-        crypto.randomBytes(4).copy(d, i);
-      } else {
-        rd.push(n2 % 1e7);
-        i += 4;
-      }
-    }
-    i = k / 4;
-  } else {
-    throw Error(cryptoUnavailable);
-  }
-  k = rd[--i];
-  sd %= LOG_BASE;
-  if (k && sd) {
-    n2 = mathpow(10, LOG_BASE - sd);
-    rd[i] = (k / n2 | 0) * n2;
-  }
-  for (; rd[i] === 0; i--)
-    rd.pop();
-  if (i < 0) {
-    e = 0;
-    rd = [0];
-  } else {
-    e = -1;
-    for (; rd[0] === 0; e -= LOG_BASE)
-      rd.shift();
-    for (k = 1, n2 = rd[0]; n2 >= 10; n2 /= 10)
-      k++;
-    if (k < LOG_BASE)
-      e -= LOG_BASE - k;
-  }
-  r.e = e;
-  r.d = rd;
-  return r;
-}
-function round(x) {
-  return finalise(x = new this(x), x.e + 1, this.rounding);
-}
-function sign(x) {
-  x = new this(x);
-  return x.d ? x.d[0] ? x.s : 0 * x.s : x.s || NaN;
-}
-function sin(x) {
-  return new this(x).sin();
-}
-function sinh(x) {
-  return new this(x).sinh();
-}
-function sqrt(x) {
-  return new this(x).sqrt();
-}
-function sub(x, y) {
-  return new this(x).sub(y);
-}
-function sum() {
-  var i = 0, args = arguments, x = new this(args[i]);
-  external = false;
-  for (; x.s && ++i < args.length; )
-    x = x.plus(args[i]);
-  external = true;
-  return finalise(x, this.precision, this.rounding);
-}
-function tan(x) {
-  return new this(x).tan();
-}
-function tanh(x) {
-  return new this(x).tanh();
-}
-function trunc(x) {
-  return finalise(x = new this(x), x.e + 1, 1);
-}
-P[Symbol.for("nodejs.util.inspect.custom")] = P.toString;
-P[Symbol.toStringTag] = "Decimal";
-var Decimal = P.constructor = clone(DEFAULTS);
-LN10 = new Decimal(LN10);
-PI = new Decimal(PI);
-
 // libs/library/src/allocation/signal.ts
 var HOUR = 3600;
 var INTRA_CHAIN_SIGNAL_WINDOW = { windowSeconds: 12 * HOUR, stepSeconds: HOUR };
@@ -2412,6 +51,17 @@ function curveModel(curve) {
     turn: alpha > 1 ? 2 * rest / (alpha - 1) : Infinity
   };
 }
+function curveMarginal(model, r0, x) {
+  const at = Math.min(x, model.turn);
+  const { rest, alpha } = model;
+  return r0 * (rest / (rest + at)) ** alpha * (1 - alpha * at / (rest + at));
+}
+function modelMarginal(model, amount) {
+  const spot = curveMarginal(model, model.spot0, Math.min(amount, model.held));
+  if (amount <= model.held)
+    return spot;
+  return Math.min(spot, curveMarginal(model, model.signal0, amount));
+}
 function revenue(model, r0, x) {
   return x * r0 * (model.rest / (model.rest + x)) ** model.alpha;
 }
@@ -2451,9 +101,9 @@ function solveSegmentGreedy(providers, maxAllocationPercent) {
   for (const { index, size } of segments) {
     if (remaining <= 0)
       break;
-    const share = Math.min(size, remaining);
-    distribution[index] += share;
-    remaining -= share;
+    const share2 = Math.min(size, remaining);
+    distribution[index] += share2;
+    remaining -= share2;
   }
   if (remaining > 0) {
     distribution[segments.find(({ size }) => size > 0).index] += remaining;
@@ -2461,10 +111,70 @@ function solveSegmentGreedy(providers, maxAllocationPercent) {
   return distribution;
 }
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/_version.js
+// libs/library/src/allocation/water-filling.ts
+var MAX_BISECTIONS = 200;
+function solveWaterFilling(providers, entry, total) {
+  if (providers[entry] === void 0)
+    throw new RangeError(`Entry provider ${entry} is not one of the providers`);
+  if (total <= 0n)
+    return { amounts: providers.map(() => 0n), lambda: Infinity };
+  const models = providers.map(curveModel);
+  const caps = providers.map(({ cap }, i) => i === entry || cap > total ? total : cap < 0n ? 0n : cap);
+  const fill = (lambda) => models.map((model, i) => amountAt(model, caps[i], lambda));
+  const sum2 = (amounts2) => amounts2.reduce((acc, amount) => acc + amount, 0n);
+  const top = Math.max(...models.map((model) => modelMarginal(model, 1)));
+  const bottom = Math.min(...models.map((model, i) => modelMarginal(model, Number(caps[i]))));
+  let hi = top + Math.abs(top) + 1;
+  let lo = bottom - Math.abs(bottom) - 1;
+  for (let step = 0; step < MAX_BISECTIONS; step++) {
+    const mid = (lo + hi) / 2;
+    if (mid <= lo || mid >= hi)
+      break;
+    const amounts2 = fill(mid);
+    const placed = sum2(amounts2);
+    if (placed === total)
+      return { amounts: amounts2, lambda: mid };
+    if (placed > total)
+      lo = mid;
+    else
+      hi = mid;
+  }
+  const amounts = fill(hi);
+  const ceiling = fill(lo);
+  let remaining = total - sum2(amounts);
+  for (const i of [entry, ...[...providers.keys()].filter((index) => index !== entry)]) {
+    if (remaining === 0n)
+      break;
+    const room = ceiling[i] - amounts[i];
+    const take = room < remaining ? room : remaining;
+    if (take > 0n) {
+      amounts[i] += take;
+      remaining -= take;
+    }
+  }
+  return { amounts, lambda: lo };
+}
+function amountAt(model, cap, lambda) {
+  if (cap === 0n || modelMarginal(model, 1) < lambda)
+    return 0n;
+  if (modelMarginal(model, Number(cap)) >= lambda)
+    return cap;
+  let lo = 1n;
+  let hi = cap;
+  while (hi - lo > 1n) {
+    const mid = (lo + hi) / 2n;
+    if (modelMarginal(model, Number(mid)) >= lambda)
+      lo = mid;
+    else
+      hi = mid;
+  }
+  return lo;
+}
+
+// node_modules/ethers/lib.esm/_version.js
 var version = "6.11.1";
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/utils/properties.js
+// node_modules/ethers/lib.esm/utils/properties.js
 function checkType(value, type, name) {
   const types = type.split("|").map((t) => t.trim());
   for (let i = 0; i < types.length; i++) {
@@ -2505,7 +215,7 @@ function defineProperties(target, values, types) {
   }
 }
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/utils/errors.js
+// node_modules/ethers/lib.esm/utils/errors.js
 function stringify(value) {
   if (value == null) {
     return "null";
@@ -2656,7 +366,7 @@ function assertPrivate(givenGuard, guard, className) {
   }
 }
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/utils/data.js
+// node_modules/ethers/lib.esm/utils/data.js
 function _getBytes(value, name, copy) {
   if (value instanceof Uint8Array) {
     if (copy) {
@@ -2740,7 +450,7 @@ function zeroPadBytes(data, length) {
   return zeroPad(data, length, false);
 }
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/utils/maths.js
+// node_modules/ethers/lib.esm/utils/maths.js
 var BN_0 = BigInt(0);
 var BN_1 = BigInt(1);
 var maxValue = 9007199254740991;
@@ -2890,7 +600,7 @@ function toBeArray(_value) {
   return result;
 }
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/utils/events.js
+// node_modules/ethers/lib.esm/utils/events.js
 var EventPayload = class {
   /**
    *  The event filter.
@@ -2920,7 +630,7 @@ var EventPayload = class {
   }
 };
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/utils/utf8.js
+// node_modules/ethers/lib.esm/utils/utf8.js
 function errorFunc(reason, offset, bytes2, output2, badCodepoint) {
   assertArgument(false, `invalid codepoint at offset ${offset}; ${reason}`, "bytes", bytes2);
 }
@@ -3065,7 +775,7 @@ function toUtf8String(bytes2, onError) {
   return _toUtf8String(getUtf8CodePoints(bytes2, onError));
 }
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/utils/rlp-encode.js
+// node_modules/ethers/lib.esm/utils/rlp-encode.js
 function arrayifyInteger(value) {
   const result = [];
   while (value) {
@@ -3109,7 +819,7 @@ function encodeRlp(object) {
   return result;
 }
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/abi/coders/abstract-coder.js
+// node_modules/ethers/lib.esm/abi/coders/abstract-coder.js
 var WordSize = 32;
 var Padding = new Uint8Array(WordSize);
 var passProperties = ["then"];
@@ -3471,7 +1181,7 @@ var Reader = class {
   }
 };
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/node_modules/@noble/hashes/esm/_assert.js
+// node_modules/ethers/node_modules/@noble/hashes/esm/_assert.js
 function number(n2) {
   if (!Number.isSafeInteger(n2) || n2 < 0)
     throw new Error(`Wrong positive integer: ${n2}`);
@@ -3496,7 +1206,7 @@ function output(out, instance) {
   }
 }
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/node_modules/@noble/hashes/esm/_u64.js
+// node_modules/ethers/node_modules/@noble/hashes/esm/_u64.js
 var U32_MASK64 = /* @__PURE__ */ BigInt(2 ** 32 - 1);
 var _32n = /* @__PURE__ */ BigInt(32);
 function fromBig(n2, le = false) {
@@ -3518,7 +1228,7 @@ var rotlSL = (h, l, s) => l << s | h >>> 32 - s;
 var rotlBH = (h, l, s) => l << s - 32 | h >>> 64 - s;
 var rotlBL = (h, l, s) => h << s - 32 | l >>> 64 - s;
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/node_modules/@noble/hashes/esm/utils.js
+// node_modules/ethers/node_modules/@noble/hashes/esm/utils.js
 var u8a = (a) => a instanceof Uint8Array;
 var u32 = (arr) => new Uint32Array(arr.buffer, arr.byteOffset, Math.floor(arr.byteLength / 4));
 var isLE = new Uint8Array(new Uint32Array([287454020]).buffer)[0] === 68;
@@ -3560,7 +1270,7 @@ function wrapXOFConstructorWithOpts(hashCons) {
   return hashC;
 }
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/node_modules/@noble/hashes/esm/sha3.js
+// node_modules/ethers/node_modules/@noble/hashes/esm/sha3.js
 var [SHA3_PI, SHA3_ROTL, _SHA3_IOTA] = [[], [], []];
 var _0n = /* @__PURE__ */ BigInt(0);
 var _1n = /* @__PURE__ */ BigInt(1);
@@ -3740,7 +1450,7 @@ var genShake = (suffix, blockLen, outputLen) => wrapXOFConstructorWithOpts((opts
 var shake128 = /* @__PURE__ */ genShake(31, 168, 128 / 8);
 var shake256 = /* @__PURE__ */ genShake(31, 136, 256 / 8);
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/crypto/keccak.js
+// node_modules/ethers/lib.esm/crypto/keccak.js
 var locked = false;
 var _keccak256 = function(data) {
   return keccak_256(data);
@@ -3762,7 +1472,7 @@ keccak256.register = function(func) {
 };
 Object.freeze(keccak256);
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/address/address.js
+// node_modules/ethers/lib.esm/address/address.js
 var BN_02 = BigInt(0);
 var BN_36 = BigInt(36);
 function getChecksumAddress(address) {
@@ -3845,7 +1555,7 @@ function getAddress(address) {
   assertArgument(false, "invalid address", "address", address);
 }
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/address/contract-address.js
+// node_modules/ethers/lib.esm/address/contract-address.js
 function getCreateAddress(tx) {
   const from = getAddress(tx.from);
   const nonce = getBigInt(tx.nonce, "tx.nonce");
@@ -3860,7 +1570,7 @@ function getCreateAddress(tx) {
   return getAddress(dataSlice(keccak256(encodeRlp([from, nonceHex])), 12));
 }
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/address/checks.js
+// node_modules/ethers/lib.esm/address/checks.js
 function isAddressable(value) {
   return value && typeof value.getAddress === "function";
 }
@@ -3887,7 +1597,7 @@ function resolveAddress(target, resolver) {
   assertArgument(false, "unsupported addressable value", "target", target);
 }
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/abi/typed.js
+// node_modules/ethers/lib.esm/abi/typed.js
 var _gaurd = {};
 function n(value, width) {
   let signed = false;
@@ -4668,7 +2378,7 @@ var Typed = class {
   }
 };
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/abi/coders/address.js
+// node_modules/ethers/lib.esm/abi/coders/address.js
 var AddressCoder = class extends Coder {
   constructor(localName) {
     super("address", "address", localName, false);
@@ -4690,7 +2400,7 @@ var AddressCoder = class extends Coder {
   }
 };
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/abi/coders/anonymous.js
+// node_modules/ethers/lib.esm/abi/coders/anonymous.js
 var AnonymousCoder = class extends Coder {
   coder;
   constructor(coder) {
@@ -4708,7 +2418,7 @@ var AnonymousCoder = class extends Coder {
   }
 };
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/abi/coders/array.js
+// node_modules/ethers/lib.esm/abi/coders/array.js
 function pack(writer, coders, values) {
   let arrayValues = [];
   if (Array.isArray(values)) {
@@ -4838,7 +2548,7 @@ var ArrayCoder = class extends Coder {
   }
 };
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/abi/coders/boolean.js
+// node_modules/ethers/lib.esm/abi/coders/boolean.js
 var BooleanCoder = class extends Coder {
   constructor(localName) {
     super("bool", "bool", localName, false);
@@ -4855,7 +2565,7 @@ var BooleanCoder = class extends Coder {
   }
 };
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/abi/coders/bytes.js
+// node_modules/ethers/lib.esm/abi/coders/bytes.js
 var DynamicBytesCoder = class extends Coder {
   constructor(type, localName) {
     super(type, type, localName, true);
@@ -4882,7 +2592,7 @@ var BytesCoder = class extends DynamicBytesCoder {
   }
 };
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/abi/coders/fixed-bytes.js
+// node_modules/ethers/lib.esm/abi/coders/fixed-bytes.js
 var FixedBytesCoder = class extends Coder {
   size;
   constructor(size, localName) {
@@ -4905,7 +2615,7 @@ var FixedBytesCoder = class extends Coder {
   }
 };
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/abi/coders/null.js
+// node_modules/ethers/lib.esm/abi/coders/null.js
 var Empty = new Uint8Array([]);
 var NullCoder = class extends Coder {
   constructor(localName) {
@@ -4926,7 +2636,7 @@ var NullCoder = class extends Coder {
   }
 };
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/abi/coders/number.js
+// node_modules/ethers/lib.esm/abi/coders/number.js
 var BN_03 = BigInt(0);
 var BN_12 = BigInt(1);
 var BN_MAX_UINT256 = BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
@@ -4964,7 +2674,7 @@ var NumberCoder = class extends Coder {
   }
 };
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/abi/coders/string.js
+// node_modules/ethers/lib.esm/abi/coders/string.js
 var StringCoder = class extends DynamicBytesCoder {
   constructor(localName) {
     super("string", localName);
@@ -4980,7 +2690,7 @@ var StringCoder = class extends DynamicBytesCoder {
   }
 };
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/abi/coders/tuple.js
+// node_modules/ethers/lib.esm/abi/coders/tuple.js
 var TupleCoder = class extends Coder {
   coders;
   constructor(coders, localName) {
@@ -5035,12 +2745,12 @@ var TupleCoder = class extends Coder {
   }
 };
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/hash/id.js
+// node_modules/ethers/lib.esm/hash/id.js
 function id(value) {
   return keccak256(toUtf8Bytes(value));
 }
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/transaction/accesslist.js
+// node_modules/ethers/lib.esm/transaction/accesslist.js
 function accessSetify(addr, storageKeys) {
   return {
     address: getAddress(addr),
@@ -5073,7 +2783,7 @@ function accessListify(value) {
   return result;
 }
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/abi/fragments.js
+// node_modules/ethers/lib.esm/abi/fragments.js
 function setify(items) {
   const result = /* @__PURE__ */ new Set();
   items.forEach((k) => result.add(k));
@@ -6321,7 +4031,7 @@ var StructFragment = class extends NamedFragment {
   }
 };
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/abi/abi-coder.js
+// node_modules/ethers/lib.esm/abi/abi-coder.js
 var PanicReasons = /* @__PURE__ */ new Map();
 PanicReasons.set(0, "GENERIC_PANIC");
 PanicReasons.set(1, "ASSERT_FALSE");
@@ -6491,7 +4201,7 @@ var AbiCoder = class {
   }
 };
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/abi/interface.js
+// node_modules/ethers/lib.esm/abi/interface.js
 var LogDescription = class {
   /**
    *  The matching fragment for the ``topic0``.
@@ -7496,7 +5206,7 @@ var Interface = class {
   }
 };
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/providers/provider.js
+// node_modules/ethers/lib.esm/providers/provider.js
 var BN_04 = BigInt(0);
 function getValue2(value) {
   if (value == null) {
@@ -8703,7 +6413,7 @@ function createRemovedLogFilter(log3) {
   } };
 }
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/contract/wrappers.js
+// node_modules/ethers/lib.esm/contract/wrappers.js
 var EventLog = class extends Log {
   /**
    *  The Contract Interface.
@@ -8858,7 +6568,7 @@ var ContractEventPayload = class extends ContractUnknownEventPayload {
   }
 };
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/contract/contract.js
+// node_modules/ethers/lib.esm/contract/contract.js
 var BN_05 = BigInt(0);
 function canCall(value) {
   return value && typeof value.call === "function";
@@ -9735,7 +7445,7 @@ function _ContractBase() {
 var Contract = class extends _ContractBase() {
 };
 
-// ../../Backend & Contracts/Thesauros-Rebalance-Engine/node_modules/ethers/lib.esm/contract/factory.js
+// node_modules/ethers/lib.esm/contract/factory.js
 var ContractFactory = class {
   /**
    *  The Contract Interface.
@@ -25588,6 +23298,2367 @@ VaultManager__factory.abi = _abi21;
 // libs/library/src/allocation/rate-history.ts
 var providerInterface = IProvider__factory.createInterface();
 
+// node_modules/decimal.js/decimal.mjs
+var EXP_LIMIT = 9e15;
+var MAX_DIGITS = 1e9;
+var NUMERALS = "0123456789abcdef";
+var LN10 = "2.3025850929940456840179914546843642076011014886287729760333279009675726096773524802359972050895982983419677840422862486334095254650828067566662873690987816894829072083255546808437998948262331985283935053089653777326288461633662222876982198867465436674744042432743651550489343149393914796194044002221051017141748003688084012647080685567743216228355220114804663715659121373450747856947683463616792101806445070648000277502684916746550586856935673420670581136429224554405758925724208241314695689016758940256776311356919292033376587141660230105703089634572075440370847469940168269282808481184289314848524948644871927809676271275775397027668605952496716674183485704422507197965004714951050492214776567636938662976979522110718264549734772662425709429322582798502585509785265383207606726317164309505995087807523710333101197857547331541421808427543863591778117054309827482385045648019095610299291824318237525357709750539565187697510374970888692180205189339507238539205144634197265287286965110862571492198849978748873771345686209167058";
+var PI = "3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679821480865132823066470938446095505822317253594081284811174502841027019385211055596446229489549303819644288109756659334461284756482337867831652712019091456485669234603486104543266482133936072602491412737245870066063155881748815209209628292540917153643678925903600113305305488204665213841469519415116094330572703657595919530921861173819326117931051185480744623799627495673518857527248912279381830119491298336733624406566430860213949463952247371907021798609437027705392171762931767523846748184676694051320005681271452635608277857713427577896091736371787214684409012249534301465495853710507922796892589235420199561121290219608640344181598136297747713099605187072113499999983729780499510597317328160963185950244594553469083026425223082533446850352619311881710100031378387528865875332083814206171776691473035982534904287554687311595628638823537875937519577818577805321712268066130019278766111959092164201989380952572010654858632789";
+var DEFAULTS = {
+  // These values must be integers within the stated ranges (inclusive).
+  // Most of these values can be changed at run-time using the `Decimal.config` method.
+  // The maximum number of significant digits of the result of a calculation or base conversion.
+  // E.g. `Decimal.config({ precision: 20 });`
+  precision: 20,
+  // 1 to MAX_DIGITS
+  // The rounding mode used when rounding to `precision`.
+  //
+  // ROUND_UP         0 Away from zero.
+  // ROUND_DOWN       1 Towards zero.
+  // ROUND_CEIL       2 Towards +Infinity.
+  // ROUND_FLOOR      3 Towards -Infinity.
+  // ROUND_HALF_UP    4 Towards nearest neighbour. If equidistant, up.
+  // ROUND_HALF_DOWN  5 Towards nearest neighbour. If equidistant, down.
+  // ROUND_HALF_EVEN  6 Towards nearest neighbour. If equidistant, towards even neighbour.
+  // ROUND_HALF_CEIL  7 Towards nearest neighbour. If equidistant, towards +Infinity.
+  // ROUND_HALF_FLOOR 8 Towards nearest neighbour. If equidistant, towards -Infinity.
+  //
+  // E.g.
+  // `Decimal.rounding = 4;`
+  // `Decimal.rounding = Decimal.ROUND_HALF_UP;`
+  rounding: 4,
+  // 0 to 8
+  // The modulo mode used when calculating the modulus: a mod n.
+  // The quotient (q = a / n) is calculated according to the corresponding rounding mode.
+  // The remainder (r) is calculated as: r = a - n * q.
+  //
+  // UP         0 The remainder is positive if the dividend is negative, else is negative.
+  // DOWN       1 The remainder has the same sign as the dividend (JavaScript %).
+  // FLOOR      3 The remainder has the same sign as the divisor (Python %).
+  // HALF_EVEN  6 The IEEE 754 remainder function.
+  // EUCLID     9 Euclidian division. q = sign(n) * floor(a / abs(n)). Always positive.
+  //
+  // Truncated division (1), floored division (3), the IEEE 754 remainder (6), and Euclidian
+  // division (9) are commonly used for the modulus operation. The other rounding modes can also
+  // be used, but they may not give useful results.
+  modulo: 1,
+  // 0 to 9
+  // The exponent value at and beneath which `toString` returns exponential notation.
+  // JavaScript numbers: -7
+  toExpNeg: -7,
+  // 0 to -EXP_LIMIT
+  // The exponent value at and above which `toString` returns exponential notation.
+  // JavaScript numbers: 21
+  toExpPos: 21,
+  // 0 to EXP_LIMIT
+  // The minimum exponent value, beneath which underflow to zero occurs.
+  // JavaScript numbers: -324  (5e-324)
+  minE: -EXP_LIMIT,
+  // -1 to -EXP_LIMIT
+  // The maximum exponent value, above which overflow to Infinity occurs.
+  // JavaScript numbers: 308  (1.7976931348623157e+308)
+  maxE: EXP_LIMIT,
+  // 1 to EXP_LIMIT
+  // Whether to use cryptographically-secure random number generation, if available.
+  crypto: false
+  // true/false
+};
+var inexact;
+var quadrant;
+var external = true;
+var decimalError = "[DecimalError] ";
+var invalidArgument = decimalError + "Invalid argument: ";
+var precisionLimitExceeded = decimalError + "Precision limit exceeded";
+var cryptoUnavailable = decimalError + "crypto unavailable";
+var tag = "[object Decimal]";
+var mathfloor = Math.floor;
+var mathpow = Math.pow;
+var isBinary = /^0b([01]+(\.[01]*)?|\.[01]+)(p[+-]?\d+)?$/i;
+var isHex = /^0x([0-9a-f]+(\.[0-9a-f]*)?|\.[0-9a-f]+)(p[+-]?\d+)?$/i;
+var isOctal = /^0o([0-7]+(\.[0-7]*)?|\.[0-7]+)(p[+-]?\d+)?$/i;
+var isDecimal = /^(\d+(\.\d*)?|\.\d+)(e[+-]?\d+)?$/i;
+var BASE = 1e7;
+var LOG_BASE = 7;
+var MAX_SAFE_INTEGER = 9007199254740991;
+var LN10_PRECISION = LN10.length - 1;
+var PI_PRECISION = PI.length - 1;
+var P = { toStringTag: tag };
+P.absoluteValue = P.abs = function() {
+  var x = new this.constructor(this);
+  if (x.s < 0)
+    x.s = 1;
+  return finalise(x);
+};
+P.ceil = function() {
+  return finalise(new this.constructor(this), this.e + 1, 2);
+};
+P.clampedTo = P.clamp = function(min2, max2) {
+  var k, x = this, Ctor = x.constructor;
+  min2 = new Ctor(min2);
+  max2 = new Ctor(max2);
+  if (!min2.s || !max2.s)
+    return new Ctor(NaN);
+  if (min2.gt(max2))
+    throw Error(invalidArgument + max2);
+  k = x.cmp(min2);
+  return k < 0 ? min2 : x.cmp(max2) > 0 ? max2 : new Ctor(x);
+};
+P.comparedTo = P.cmp = function(y) {
+  var i, j, xdL, ydL, x = this, xd = x.d, yd = (y = new x.constructor(y)).d, xs = x.s, ys = y.s;
+  if (!xd || !yd) {
+    return !xs || !ys ? NaN : xs !== ys ? xs : xd === yd ? 0 : !xd ^ xs < 0 ? 1 : -1;
+  }
+  if (!xd[0] || !yd[0])
+    return xd[0] ? xs : yd[0] ? -ys : 0;
+  if (xs !== ys)
+    return xs;
+  if (x.e !== y.e)
+    return x.e > y.e ^ xs < 0 ? 1 : -1;
+  xdL = xd.length;
+  ydL = yd.length;
+  for (i = 0, j = xdL < ydL ? xdL : ydL; i < j; ++i) {
+    if (xd[i] !== yd[i])
+      return xd[i] > yd[i] ^ xs < 0 ? 1 : -1;
+  }
+  return xdL === ydL ? 0 : xdL > ydL ^ xs < 0 ? 1 : -1;
+};
+P.cosine = P.cos = function() {
+  var pr, rm, x = this, Ctor = x.constructor;
+  if (!x.d)
+    return new Ctor(NaN);
+  if (!x.d[0])
+    return new Ctor(1);
+  pr = Ctor.precision;
+  rm = Ctor.rounding;
+  Ctor.precision = pr + Math.max(x.e, x.sd()) + LOG_BASE;
+  Ctor.rounding = 1;
+  x = cosine(Ctor, toLessThanHalfPi(Ctor, x));
+  Ctor.precision = pr;
+  Ctor.rounding = rm;
+  return finalise(quadrant == 2 || quadrant == 3 ? x.neg() : x, pr, rm, true);
+};
+P.cubeRoot = P.cbrt = function() {
+  var e, m, n2, r, rep, s, sd, t, t3, t3plusx, x = this, Ctor = x.constructor;
+  if (!x.isFinite() || x.isZero())
+    return new Ctor(x);
+  external = false;
+  s = x.s * mathpow(x.s * x, 1 / 3);
+  if (!s || Math.abs(s) == 1 / 0) {
+    n2 = digitsToString(x.d);
+    e = x.e;
+    if (s = (e - n2.length + 1) % 3)
+      n2 += s == 1 || s == -2 ? "0" : "00";
+    s = mathpow(n2, 1 / 3);
+    e = mathfloor((e + 1) / 3) - (e % 3 == (e < 0 ? -1 : 2));
+    if (s == 1 / 0) {
+      n2 = "5e" + e;
+    } else {
+      n2 = s.toExponential();
+      n2 = n2.slice(0, n2.indexOf("e") + 1) + e;
+    }
+    r = new Ctor(n2);
+    r.s = x.s;
+  } else {
+    r = new Ctor(s.toString());
+  }
+  sd = (e = Ctor.precision) + 3;
+  for (; ; ) {
+    t = r;
+    t3 = t.times(t).times(t);
+    t3plusx = t3.plus(x);
+    r = divide(t3plusx.plus(x).times(t), t3plusx.plus(t3), sd + 2, 1);
+    if (digitsToString(t.d).slice(0, sd) === (n2 = digitsToString(r.d)).slice(0, sd)) {
+      n2 = n2.slice(sd - 3, sd + 1);
+      if (n2 == "9999" || !rep && n2 == "4999") {
+        if (!rep) {
+          finalise(t, e + 1, 0);
+          if (t.times(t).times(t).eq(x)) {
+            r = t;
+            break;
+          }
+        }
+        sd += 4;
+        rep = 1;
+      } else {
+        if (!+n2 || !+n2.slice(1) && n2.charAt(0) == "5") {
+          finalise(r, e + 1, 1);
+          m = !r.times(r).times(r).eq(x);
+        }
+        break;
+      }
+    }
+  }
+  external = true;
+  return finalise(r, e, Ctor.rounding, m);
+};
+P.decimalPlaces = P.dp = function() {
+  var w, d = this.d, n2 = NaN;
+  if (d) {
+    w = d.length - 1;
+    n2 = (w - mathfloor(this.e / LOG_BASE)) * LOG_BASE;
+    w = d[w];
+    if (w)
+      for (; w % 10 == 0; w /= 10)
+        n2--;
+    if (n2 < 0)
+      n2 = 0;
+  }
+  return n2;
+};
+P.dividedBy = P.div = function(y) {
+  return divide(this, new this.constructor(y));
+};
+P.dividedToIntegerBy = P.divToInt = function(y) {
+  var x = this, Ctor = x.constructor;
+  return finalise(divide(x, new Ctor(y), 0, 1, 1), Ctor.precision, Ctor.rounding);
+};
+P.equals = P.eq = function(y) {
+  return this.cmp(y) === 0;
+};
+P.floor = function() {
+  return finalise(new this.constructor(this), this.e + 1, 3);
+};
+P.greaterThan = P.gt = function(y) {
+  return this.cmp(y) > 0;
+};
+P.greaterThanOrEqualTo = P.gte = function(y) {
+  var k = this.cmp(y);
+  return k == 1 || k === 0;
+};
+P.hyperbolicCosine = P.cosh = function() {
+  var k, n2, pr, rm, len, x = this, Ctor = x.constructor, one = new Ctor(1);
+  if (!x.isFinite())
+    return new Ctor(x.s ? 1 / 0 : NaN);
+  if (x.isZero())
+    return one;
+  pr = Ctor.precision;
+  rm = Ctor.rounding;
+  Ctor.precision = pr + Math.max(x.e, x.sd()) + 4;
+  Ctor.rounding = 1;
+  len = x.d.length;
+  if (len < 32) {
+    k = Math.ceil(len / 3);
+    n2 = (1 / tinyPow(4, k)).toString();
+  } else {
+    k = 16;
+    n2 = "2.3283064365386962890625e-10";
+  }
+  x = taylorSeries(Ctor, 1, x.times(n2), new Ctor(1), true);
+  var cosh2_x, i = k, d8 = new Ctor(8);
+  for (; i--; ) {
+    cosh2_x = x.times(x);
+    x = one.minus(cosh2_x.times(d8.minus(cosh2_x.times(d8))));
+  }
+  return finalise(x, Ctor.precision = pr, Ctor.rounding = rm, true);
+};
+P.hyperbolicSine = P.sinh = function() {
+  var k, pr, rm, len, x = this, Ctor = x.constructor;
+  if (!x.isFinite() || x.isZero())
+    return new Ctor(x);
+  pr = Ctor.precision;
+  rm = Ctor.rounding;
+  Ctor.precision = pr + Math.max(x.e, x.sd()) + 4;
+  Ctor.rounding = 1;
+  len = x.d.length;
+  if (len < 3) {
+    x = taylorSeries(Ctor, 2, x, x, true);
+  } else {
+    k = 1.4 * Math.sqrt(len);
+    k = k > 16 ? 16 : k | 0;
+    x = x.times(1 / tinyPow(5, k));
+    x = taylorSeries(Ctor, 2, x, x, true);
+    var sinh2_x, d5 = new Ctor(5), d16 = new Ctor(16), d20 = new Ctor(20);
+    for (; k--; ) {
+      sinh2_x = x.times(x);
+      x = x.times(d5.plus(sinh2_x.times(d16.times(sinh2_x).plus(d20))));
+    }
+  }
+  Ctor.precision = pr;
+  Ctor.rounding = rm;
+  return finalise(x, pr, rm, true);
+};
+P.hyperbolicTangent = P.tanh = function() {
+  var pr, rm, x = this, Ctor = x.constructor;
+  if (!x.isFinite())
+    return new Ctor(x.s);
+  if (x.isZero())
+    return new Ctor(x);
+  pr = Ctor.precision;
+  rm = Ctor.rounding;
+  Ctor.precision = pr + 7;
+  Ctor.rounding = 1;
+  return divide(x.sinh(), x.cosh(), Ctor.precision = pr, Ctor.rounding = rm);
+};
+P.inverseCosine = P.acos = function() {
+  var x = this, Ctor = x.constructor, k = x.abs().cmp(1), pr = Ctor.precision, rm = Ctor.rounding;
+  if (k !== -1) {
+    return k === 0 ? x.isNeg() ? getPi(Ctor, pr, rm) : new Ctor(0) : new Ctor(NaN);
+  }
+  if (x.isZero())
+    return getPi(Ctor, pr + 4, rm).times(0.5);
+  Ctor.precision = pr + 6;
+  Ctor.rounding = 1;
+  x = new Ctor(1).minus(x).div(x.plus(1)).sqrt().atan();
+  Ctor.precision = pr;
+  Ctor.rounding = rm;
+  return x.times(2);
+};
+P.inverseHyperbolicCosine = P.acosh = function() {
+  var pr, rm, x = this, Ctor = x.constructor;
+  if (x.lte(1))
+    return new Ctor(x.eq(1) ? 0 : NaN);
+  if (!x.isFinite())
+    return new Ctor(x);
+  pr = Ctor.precision;
+  rm = Ctor.rounding;
+  Ctor.precision = pr + Math.max(Math.abs(x.e), x.sd()) + 4;
+  Ctor.rounding = 1;
+  external = false;
+  x = x.times(x).minus(1).sqrt().plus(x);
+  external = true;
+  Ctor.precision = pr;
+  Ctor.rounding = rm;
+  return x.ln();
+};
+P.inverseHyperbolicSine = P.asinh = function() {
+  var pr, rm, x = this, Ctor = x.constructor;
+  if (!x.isFinite() || x.isZero())
+    return new Ctor(x);
+  pr = Ctor.precision;
+  rm = Ctor.rounding;
+  Ctor.precision = pr + 2 * Math.max(Math.abs(x.e), x.sd()) + 6;
+  Ctor.rounding = 1;
+  external = false;
+  x = x.times(x).plus(1).sqrt().plus(x);
+  external = true;
+  Ctor.precision = pr;
+  Ctor.rounding = rm;
+  return x.ln();
+};
+P.inverseHyperbolicTangent = P.atanh = function() {
+  var pr, rm, wpr, xsd, x = this, Ctor = x.constructor;
+  if (!x.isFinite())
+    return new Ctor(NaN);
+  if (x.e >= 0)
+    return new Ctor(x.abs().eq(1) ? x.s / 0 : x.isZero() ? x : NaN);
+  pr = Ctor.precision;
+  rm = Ctor.rounding;
+  xsd = x.sd();
+  if (Math.max(xsd, pr) < 2 * -x.e - 1)
+    return finalise(new Ctor(x), pr, rm, true);
+  Ctor.precision = wpr = xsd - x.e;
+  x = divide(x.plus(1), new Ctor(1).minus(x), wpr + pr, 1);
+  Ctor.precision = pr + 4;
+  Ctor.rounding = 1;
+  x = x.ln();
+  Ctor.precision = pr;
+  Ctor.rounding = rm;
+  return x.times(0.5);
+};
+P.inverseSine = P.asin = function() {
+  var halfPi, k, pr, rm, x = this, Ctor = x.constructor;
+  if (x.isZero())
+    return new Ctor(x);
+  k = x.abs().cmp(1);
+  pr = Ctor.precision;
+  rm = Ctor.rounding;
+  if (k !== -1) {
+    if (k === 0) {
+      halfPi = getPi(Ctor, pr + 4, rm).times(0.5);
+      halfPi.s = x.s;
+      return halfPi;
+    }
+    return new Ctor(NaN);
+  }
+  Ctor.precision = pr + 6;
+  Ctor.rounding = 1;
+  x = x.div(new Ctor(1).minus(x.times(x)).sqrt().plus(1)).atan();
+  Ctor.precision = pr;
+  Ctor.rounding = rm;
+  return x.times(2);
+};
+P.inverseTangent = P.atan = function() {
+  var i, j, k, n2, px, t, r, wpr, x2, x = this, Ctor = x.constructor, pr = Ctor.precision, rm = Ctor.rounding;
+  if (!x.isFinite()) {
+    if (!x.s)
+      return new Ctor(NaN);
+    if (pr + 4 <= PI_PRECISION) {
+      r = getPi(Ctor, pr + 4, rm).times(0.5);
+      r.s = x.s;
+      return r;
+    }
+  } else if (x.isZero()) {
+    return new Ctor(x);
+  } else if (x.abs().eq(1) && pr + 4 <= PI_PRECISION) {
+    r = getPi(Ctor, pr + 4, rm).times(0.25);
+    r.s = x.s;
+    return r;
+  }
+  Ctor.precision = wpr = pr + 10;
+  Ctor.rounding = 1;
+  k = Math.min(28, wpr / LOG_BASE + 2 | 0);
+  for (i = k; i; --i)
+    x = x.div(x.times(x).plus(1).sqrt().plus(1));
+  external = false;
+  j = Math.ceil(wpr / LOG_BASE);
+  n2 = 1;
+  x2 = x.times(x);
+  r = new Ctor(x);
+  px = x;
+  for (; i !== -1; ) {
+    px = px.times(x2);
+    t = r.minus(px.div(n2 += 2));
+    px = px.times(x2);
+    r = t.plus(px.div(n2 += 2));
+    if (r.d[j] !== void 0)
+      for (i = j; r.d[i] === t.d[i] && i--; )
+        ;
+  }
+  if (k)
+    r = r.times(2 << k - 1);
+  external = true;
+  return finalise(r, Ctor.precision = pr, Ctor.rounding = rm, true);
+};
+P.isFinite = function() {
+  return !!this.d;
+};
+P.isInteger = P.isInt = function() {
+  return !!this.d && mathfloor(this.e / LOG_BASE) > this.d.length - 2;
+};
+P.isNaN = function() {
+  return !this.s;
+};
+P.isNegative = P.isNeg = function() {
+  return this.s < 0;
+};
+P.isPositive = P.isPos = function() {
+  return this.s > 0;
+};
+P.isZero = function() {
+  return !!this.d && this.d[0] === 0;
+};
+P.lessThan = P.lt = function(y) {
+  return this.cmp(y) < 0;
+};
+P.lessThanOrEqualTo = P.lte = function(y) {
+  return this.cmp(y) < 1;
+};
+P.logarithm = P.log = function(base) {
+  var isBase10, d, denominator, k, inf, num, sd, r, arg = this, Ctor = arg.constructor, pr = Ctor.precision, rm = Ctor.rounding, guard = 5;
+  if (base == null) {
+    base = new Ctor(10);
+    isBase10 = true;
+  } else {
+    base = new Ctor(base);
+    d = base.d;
+    if (base.s < 0 || !d || !d[0] || base.eq(1))
+      return new Ctor(NaN);
+    isBase10 = base.eq(10);
+  }
+  d = arg.d;
+  if (arg.s < 0 || !d || !d[0] || arg.eq(1)) {
+    return new Ctor(d && !d[0] ? -1 / 0 : arg.s != 1 ? NaN : d ? 0 : 1 / 0);
+  }
+  if (isBase10) {
+    if (d.length > 1) {
+      inf = true;
+    } else {
+      for (k = d[0]; k % 10 === 0; )
+        k /= 10;
+      inf = k !== 1;
+    }
+  }
+  external = false;
+  sd = pr + guard;
+  num = naturalLogarithm(arg, sd);
+  denominator = isBase10 ? getLn10(Ctor, sd + 10) : naturalLogarithm(base, sd);
+  r = divide(num, denominator, sd, 1);
+  if (checkRoundingDigits(r.d, k = pr, rm)) {
+    do {
+      sd += 10;
+      num = naturalLogarithm(arg, sd);
+      denominator = isBase10 ? getLn10(Ctor, sd + 10) : naturalLogarithm(base, sd);
+      r = divide(num, denominator, sd, 1);
+      if (!inf) {
+        if (+digitsToString(r.d).slice(k + 1, k + 15) + 1 == 1e14) {
+          r = finalise(r, pr + 1, 0);
+        }
+        break;
+      }
+    } while (checkRoundingDigits(r.d, k += 10, rm));
+  }
+  external = true;
+  return finalise(r, pr, rm);
+};
+P.minus = P.sub = function(y) {
+  var d, e, i, j, k, len, pr, rm, xd, xe, xLTy, yd, x = this, Ctor = x.constructor;
+  y = new Ctor(y);
+  if (!x.d || !y.d) {
+    if (!x.s || !y.s)
+      y = new Ctor(NaN);
+    else if (x.d)
+      y.s = -y.s;
+    else
+      y = new Ctor(y.d || x.s !== y.s ? x : NaN);
+    return y;
+  }
+  if (x.s != y.s) {
+    y.s = -y.s;
+    return x.plus(y);
+  }
+  xd = x.d;
+  yd = y.d;
+  pr = Ctor.precision;
+  rm = Ctor.rounding;
+  if (!xd[0] || !yd[0]) {
+    if (yd[0])
+      y.s = -y.s;
+    else if (xd[0])
+      y = new Ctor(x);
+    else
+      return new Ctor(rm === 3 ? -0 : 0);
+    return external ? finalise(y, pr, rm) : y;
+  }
+  e = mathfloor(y.e / LOG_BASE);
+  xe = mathfloor(x.e / LOG_BASE);
+  xd = xd.slice();
+  k = xe - e;
+  if (k) {
+    xLTy = k < 0;
+    if (xLTy) {
+      d = xd;
+      k = -k;
+      len = yd.length;
+    } else {
+      d = yd;
+      e = xe;
+      len = xd.length;
+    }
+    i = Math.max(Math.ceil(pr / LOG_BASE), len) + 2;
+    if (k > i) {
+      k = i;
+      d.length = 1;
+    }
+    d.reverse();
+    for (i = k; i--; )
+      d.push(0);
+    d.reverse();
+  } else {
+    i = xd.length;
+    len = yd.length;
+    xLTy = i < len;
+    if (xLTy)
+      len = i;
+    for (i = 0; i < len; i++) {
+      if (xd[i] != yd[i]) {
+        xLTy = xd[i] < yd[i];
+        break;
+      }
+    }
+    k = 0;
+  }
+  if (xLTy) {
+    d = xd;
+    xd = yd;
+    yd = d;
+    y.s = -y.s;
+  }
+  len = xd.length;
+  for (i = yd.length - len; i > 0; --i)
+    xd[len++] = 0;
+  for (i = yd.length; i > k; ) {
+    if (xd[--i] < yd[i]) {
+      for (j = i; j && xd[--j] === 0; )
+        xd[j] = BASE - 1;
+      --xd[j];
+      xd[i] += BASE;
+    }
+    xd[i] -= yd[i];
+  }
+  for (; xd[--len] === 0; )
+    xd.pop();
+  for (; xd[0] === 0; xd.shift())
+    --e;
+  if (!xd[0])
+    return new Ctor(rm === 3 ? -0 : 0);
+  y.d = xd;
+  y.e = getBase10Exponent(xd, e);
+  return external ? finalise(y, pr, rm) : y;
+};
+P.modulo = P.mod = function(y) {
+  var q, x = this, Ctor = x.constructor;
+  y = new Ctor(y);
+  if (!x.d || !y.s || y.d && !y.d[0])
+    return new Ctor(NaN);
+  if (!y.d || x.d && !x.d[0]) {
+    return finalise(new Ctor(x), Ctor.precision, Ctor.rounding);
+  }
+  external = false;
+  if (Ctor.modulo == 9) {
+    q = divide(x, y.abs(), 0, 3, 1);
+    q.s *= y.s;
+  } else {
+    q = divide(x, y, 0, Ctor.modulo, 1);
+  }
+  q = q.times(y);
+  external = true;
+  return x.minus(q);
+};
+P.naturalExponential = P.exp = function() {
+  return naturalExponential(this);
+};
+P.naturalLogarithm = P.ln = function() {
+  return naturalLogarithm(this);
+};
+P.negated = P.neg = function() {
+  var x = new this.constructor(this);
+  x.s = -x.s;
+  return finalise(x);
+};
+P.plus = P.add = function(y) {
+  var carry, d, e, i, k, len, pr, rm, xd, yd, x = this, Ctor = x.constructor;
+  y = new Ctor(y);
+  if (!x.d || !y.d) {
+    if (!x.s || !y.s)
+      y = new Ctor(NaN);
+    else if (!x.d)
+      y = new Ctor(y.d || x.s === y.s ? x : NaN);
+    return y;
+  }
+  if (x.s != y.s) {
+    y.s = -y.s;
+    return x.minus(y);
+  }
+  xd = x.d;
+  yd = y.d;
+  pr = Ctor.precision;
+  rm = Ctor.rounding;
+  if (!xd[0] || !yd[0]) {
+    if (!yd[0])
+      y = new Ctor(x);
+    return external ? finalise(y, pr, rm) : y;
+  }
+  k = mathfloor(x.e / LOG_BASE);
+  e = mathfloor(y.e / LOG_BASE);
+  xd = xd.slice();
+  i = k - e;
+  if (i) {
+    if (i < 0) {
+      d = xd;
+      i = -i;
+      len = yd.length;
+    } else {
+      d = yd;
+      e = k;
+      len = xd.length;
+    }
+    k = Math.ceil(pr / LOG_BASE);
+    len = k > len ? k + 1 : len + 1;
+    if (i > len) {
+      i = len;
+      d.length = 1;
+    }
+    d.reverse();
+    for (; i--; )
+      d.push(0);
+    d.reverse();
+  }
+  len = xd.length;
+  i = yd.length;
+  if (len - i < 0) {
+    i = len;
+    d = yd;
+    yd = xd;
+    xd = d;
+  }
+  for (carry = 0; i; ) {
+    carry = (xd[--i] = xd[i] + yd[i] + carry) / BASE | 0;
+    xd[i] %= BASE;
+  }
+  if (carry) {
+    xd.unshift(carry);
+    ++e;
+  }
+  for (len = xd.length; xd[--len] == 0; )
+    xd.pop();
+  y.d = xd;
+  y.e = getBase10Exponent(xd, e);
+  return external ? finalise(y, pr, rm) : y;
+};
+P.precision = P.sd = function(z) {
+  var k, x = this;
+  if (z !== void 0 && z !== !!z && z !== 1 && z !== 0)
+    throw Error(invalidArgument + z);
+  if (x.d) {
+    k = getPrecision(x.d);
+    if (z && x.e + 1 > k)
+      k = x.e + 1;
+  } else {
+    k = NaN;
+  }
+  return k;
+};
+P.round = function() {
+  var x = this, Ctor = x.constructor;
+  return finalise(new Ctor(x), x.e + 1, Ctor.rounding);
+};
+P.sine = P.sin = function() {
+  var pr, rm, x = this, Ctor = x.constructor;
+  if (!x.isFinite())
+    return new Ctor(NaN);
+  if (x.isZero())
+    return new Ctor(x);
+  pr = Ctor.precision;
+  rm = Ctor.rounding;
+  Ctor.precision = pr + Math.max(x.e, x.sd()) + LOG_BASE;
+  Ctor.rounding = 1;
+  x = sine(Ctor, toLessThanHalfPi(Ctor, x));
+  Ctor.precision = pr;
+  Ctor.rounding = rm;
+  return finalise(quadrant > 2 ? x.neg() : x, pr, rm, true);
+};
+P.squareRoot = P.sqrt = function() {
+  var m, n2, sd, r, rep, t, x = this, d = x.d, e = x.e, s = x.s, Ctor = x.constructor;
+  if (s !== 1 || !d || !d[0]) {
+    return new Ctor(!s || s < 0 && (!d || d[0]) ? NaN : d ? x : 1 / 0);
+  }
+  external = false;
+  s = Math.sqrt(+x);
+  if (s == 0 || s == 1 / 0) {
+    n2 = digitsToString(d);
+    if ((n2.length + e) % 2 == 0)
+      n2 += "0";
+    s = Math.sqrt(n2);
+    e = mathfloor((e + 1) / 2) - (e < 0 || e % 2);
+    if (s == 1 / 0) {
+      n2 = "5e" + e;
+    } else {
+      n2 = s.toExponential();
+      n2 = n2.slice(0, n2.indexOf("e") + 1) + e;
+    }
+    r = new Ctor(n2);
+  } else {
+    r = new Ctor(s.toString());
+  }
+  sd = (e = Ctor.precision) + 3;
+  for (; ; ) {
+    t = r;
+    r = t.plus(divide(x, t, sd + 2, 1)).times(0.5);
+    if (digitsToString(t.d).slice(0, sd) === (n2 = digitsToString(r.d)).slice(0, sd)) {
+      n2 = n2.slice(sd - 3, sd + 1);
+      if (n2 == "9999" || !rep && n2 == "4999") {
+        if (!rep) {
+          finalise(t, e + 1, 0);
+          if (t.times(t).eq(x)) {
+            r = t;
+            break;
+          }
+        }
+        sd += 4;
+        rep = 1;
+      } else {
+        if (!+n2 || !+n2.slice(1) && n2.charAt(0) == "5") {
+          finalise(r, e + 1, 1);
+          m = !r.times(r).eq(x);
+        }
+        break;
+      }
+    }
+  }
+  external = true;
+  return finalise(r, e, Ctor.rounding, m);
+};
+P.tangent = P.tan = function() {
+  var pr, rm, x = this, Ctor = x.constructor;
+  if (!x.isFinite())
+    return new Ctor(NaN);
+  if (x.isZero())
+    return new Ctor(x);
+  pr = Ctor.precision;
+  rm = Ctor.rounding;
+  Ctor.precision = pr + 10;
+  Ctor.rounding = 1;
+  x = x.sin();
+  x.s = 1;
+  x = divide(x, new Ctor(1).minus(x.times(x)).sqrt(), pr + 10, 0);
+  Ctor.precision = pr;
+  Ctor.rounding = rm;
+  return finalise(quadrant == 2 || quadrant == 4 ? x.neg() : x, pr, rm, true);
+};
+P.times = P.mul = function(y) {
+  var carry, e, i, k, r, rL, t, xdL, ydL, x = this, Ctor = x.constructor, xd = x.d, yd = (y = new Ctor(y)).d;
+  y.s *= x.s;
+  if (!xd || !xd[0] || !yd || !yd[0]) {
+    return new Ctor(!y.s || xd && !xd[0] && !yd || yd && !yd[0] && !xd ? NaN : !xd || !yd ? y.s / 0 : y.s * 0);
+  }
+  e = mathfloor(x.e / LOG_BASE) + mathfloor(y.e / LOG_BASE);
+  xdL = xd.length;
+  ydL = yd.length;
+  if (xdL < ydL) {
+    r = xd;
+    xd = yd;
+    yd = r;
+    rL = xdL;
+    xdL = ydL;
+    ydL = rL;
+  }
+  r = [];
+  rL = xdL + ydL;
+  for (i = rL; i--; )
+    r.push(0);
+  for (i = ydL; --i >= 0; ) {
+    carry = 0;
+    for (k = xdL + i; k > i; ) {
+      t = r[k] + yd[i] * xd[k - i - 1] + carry;
+      r[k--] = t % BASE | 0;
+      carry = t / BASE | 0;
+    }
+    r[k] = (r[k] + carry) % BASE | 0;
+  }
+  for (; !r[--rL]; )
+    r.pop();
+  if (carry)
+    ++e;
+  else
+    r.shift();
+  y.d = r;
+  y.e = getBase10Exponent(r, e);
+  return external ? finalise(y, Ctor.precision, Ctor.rounding) : y;
+};
+P.toBinary = function(sd, rm) {
+  return toStringBinary(this, 2, sd, rm);
+};
+P.toDecimalPlaces = P.toDP = function(dp, rm) {
+  var x = this, Ctor = x.constructor;
+  x = new Ctor(x);
+  if (dp === void 0)
+    return x;
+  checkInt32(dp, 0, MAX_DIGITS);
+  if (rm === void 0)
+    rm = Ctor.rounding;
+  else
+    checkInt32(rm, 0, 8);
+  return finalise(x, dp + x.e + 1, rm);
+};
+P.toExponential = function(dp, rm) {
+  var str, x = this, Ctor = x.constructor;
+  if (dp === void 0) {
+    str = finiteToString(x, true);
+  } else {
+    checkInt32(dp, 0, MAX_DIGITS);
+    if (rm === void 0)
+      rm = Ctor.rounding;
+    else
+      checkInt32(rm, 0, 8);
+    x = finalise(new Ctor(x), dp + 1, rm);
+    str = finiteToString(x, true, dp + 1);
+  }
+  return x.isNeg() && !x.isZero() ? "-" + str : str;
+};
+P.toFixed = function(dp, rm) {
+  var str, y, x = this, Ctor = x.constructor;
+  if (dp === void 0) {
+    str = finiteToString(x);
+  } else {
+    checkInt32(dp, 0, MAX_DIGITS);
+    if (rm === void 0)
+      rm = Ctor.rounding;
+    else
+      checkInt32(rm, 0, 8);
+    y = finalise(new Ctor(x), dp + x.e + 1, rm);
+    str = finiteToString(y, false, dp + y.e + 1);
+  }
+  return x.isNeg() && !x.isZero() ? "-" + str : str;
+};
+P.toFraction = function(maxD) {
+  var d, d0, d1, d2, e, k, n2, n0, n1, pr, q, r, x = this, xd = x.d, Ctor = x.constructor;
+  if (!xd)
+    return new Ctor(x);
+  n1 = d0 = new Ctor(1);
+  d1 = n0 = new Ctor(0);
+  d = new Ctor(d1);
+  e = d.e = getPrecision(xd) - x.e - 1;
+  k = e % LOG_BASE;
+  d.d[0] = mathpow(10, k < 0 ? LOG_BASE + k : k);
+  if (maxD == null) {
+    maxD = e > 0 ? d : n1;
+  } else {
+    n2 = new Ctor(maxD);
+    if (!n2.isInt() || n2.lt(n1))
+      throw Error(invalidArgument + n2);
+    maxD = n2.gt(d) ? e > 0 ? d : n1 : n2;
+  }
+  external = false;
+  n2 = new Ctor(digitsToString(xd));
+  pr = Ctor.precision;
+  Ctor.precision = e = xd.length * LOG_BASE * 2;
+  for (; ; ) {
+    q = divide(n2, d, 0, 1, 1);
+    d2 = d0.plus(q.times(d1));
+    if (d2.cmp(maxD) == 1)
+      break;
+    d0 = d1;
+    d1 = d2;
+    d2 = n1;
+    n1 = n0.plus(q.times(d2));
+    n0 = d2;
+    d2 = d;
+    d = n2.minus(q.times(d2));
+    n2 = d2;
+  }
+  d2 = divide(maxD.minus(d0), d1, 0, 1, 1);
+  n0 = n0.plus(d2.times(n1));
+  d0 = d0.plus(d2.times(d1));
+  n0.s = n1.s = x.s;
+  r = divide(n1, d1, e, 1).minus(x).abs().cmp(divide(n0, d0, e, 1).minus(x).abs()) < 1 ? [n1, d1] : [n0, d0];
+  Ctor.precision = pr;
+  external = true;
+  return r;
+};
+P.toHexadecimal = P.toHex = function(sd, rm) {
+  return toStringBinary(this, 16, sd, rm);
+};
+P.toNearest = function(y, rm) {
+  var x = this, Ctor = x.constructor;
+  x = new Ctor(x);
+  if (y == null) {
+    if (!x.d)
+      return x;
+    y = new Ctor(1);
+    rm = Ctor.rounding;
+  } else {
+    y = new Ctor(y);
+    if (rm === void 0) {
+      rm = Ctor.rounding;
+    } else {
+      checkInt32(rm, 0, 8);
+    }
+    if (!x.d)
+      return y.s ? x : y;
+    if (!y.d) {
+      if (y.s)
+        y.s = x.s;
+      return y;
+    }
+  }
+  if (y.d[0]) {
+    external = false;
+    x = divide(x, y, 0, rm, 1).times(y);
+    external = true;
+    finalise(x);
+  } else {
+    y.s = x.s;
+    x = y;
+  }
+  return x;
+};
+P.toNumber = function() {
+  return +this;
+};
+P.toOctal = function(sd, rm) {
+  return toStringBinary(this, 8, sd, rm);
+};
+P.toPower = P.pow = function(y) {
+  var e, k, pr, r, rm, s, x = this, Ctor = x.constructor, yn = +(y = new Ctor(y));
+  if (!x.d || !y.d || !x.d[0] || !y.d[0])
+    return new Ctor(mathpow(+x, yn));
+  x = new Ctor(x);
+  if (x.eq(1))
+    return x;
+  pr = Ctor.precision;
+  rm = Ctor.rounding;
+  if (y.eq(1))
+    return finalise(x, pr, rm);
+  e = mathfloor(y.e / LOG_BASE);
+  if (e >= y.d.length - 1 && (k = yn < 0 ? -yn : yn) <= MAX_SAFE_INTEGER) {
+    r = intPow(Ctor, x, k, pr);
+    return y.s < 0 ? new Ctor(1).div(r) : finalise(r, pr, rm);
+  }
+  s = x.s;
+  if (s < 0) {
+    if (e < y.d.length - 1)
+      return new Ctor(NaN);
+    if ((y.d[e] & 1) == 0)
+      s = 1;
+    if (x.e == 0 && x.d[0] == 1 && x.d.length == 1) {
+      x.s = s;
+      return x;
+    }
+  }
+  k = mathpow(+x, yn);
+  e = k == 0 || !isFinite(k) ? mathfloor(yn * (Math.log("0." + digitsToString(x.d)) / Math.LN10 + x.e + 1)) : new Ctor(k + "").e;
+  if (e > Ctor.maxE + 1 || e < Ctor.minE - 1)
+    return new Ctor(e > 0 ? s / 0 : 0);
+  external = false;
+  Ctor.rounding = x.s = 1;
+  k = Math.min(12, (e + "").length);
+  r = naturalExponential(y.times(naturalLogarithm(x, pr + k)), pr);
+  if (r.d) {
+    r = finalise(r, pr + 5, 1);
+    if (checkRoundingDigits(r.d, pr, rm)) {
+      e = pr + 10;
+      r = finalise(naturalExponential(y.times(naturalLogarithm(x, e + k)), e), e + 5, 1);
+      if (+digitsToString(r.d).slice(pr + 1, pr + 15) + 1 == 1e14) {
+        r = finalise(r, pr + 1, 0);
+      }
+    }
+  }
+  r.s = s;
+  external = true;
+  Ctor.rounding = rm;
+  return finalise(r, pr, rm);
+};
+P.toPrecision = function(sd, rm) {
+  var str, x = this, Ctor = x.constructor;
+  if (sd === void 0) {
+    str = finiteToString(x, x.e <= Ctor.toExpNeg || x.e >= Ctor.toExpPos);
+  } else {
+    checkInt32(sd, 1, MAX_DIGITS);
+    if (rm === void 0)
+      rm = Ctor.rounding;
+    else
+      checkInt32(rm, 0, 8);
+    x = finalise(new Ctor(x), sd, rm);
+    str = finiteToString(x, sd <= x.e || x.e <= Ctor.toExpNeg, sd);
+  }
+  return x.isNeg() && !x.isZero() ? "-" + str : str;
+};
+P.toSignificantDigits = P.toSD = function(sd, rm) {
+  var x = this, Ctor = x.constructor;
+  if (sd === void 0) {
+    sd = Ctor.precision;
+    rm = Ctor.rounding;
+  } else {
+    checkInt32(sd, 1, MAX_DIGITS);
+    if (rm === void 0)
+      rm = Ctor.rounding;
+    else
+      checkInt32(rm, 0, 8);
+  }
+  return finalise(new Ctor(x), sd, rm);
+};
+P.toString = function() {
+  var x = this, Ctor = x.constructor, str = finiteToString(x, x.e <= Ctor.toExpNeg || x.e >= Ctor.toExpPos);
+  return x.isNeg() && !x.isZero() ? "-" + str : str;
+};
+P.truncated = P.trunc = function() {
+  return finalise(new this.constructor(this), this.e + 1, 1);
+};
+P.valueOf = P.toJSON = function() {
+  var x = this, Ctor = x.constructor, str = finiteToString(x, x.e <= Ctor.toExpNeg || x.e >= Ctor.toExpPos);
+  return x.isNeg() ? "-" + str : str;
+};
+function digitsToString(d) {
+  var i, k, ws, indexOfLastWord = d.length - 1, str = "", w = d[0];
+  if (indexOfLastWord > 0) {
+    str += w;
+    for (i = 1; i < indexOfLastWord; i++) {
+      ws = d[i] + "";
+      k = LOG_BASE - ws.length;
+      if (k)
+        str += getZeroString(k);
+      str += ws;
+    }
+    w = d[i];
+    ws = w + "";
+    k = LOG_BASE - ws.length;
+    if (k)
+      str += getZeroString(k);
+  } else if (w === 0) {
+    return "0";
+  }
+  for (; w % 10 === 0; )
+    w /= 10;
+  return str + w;
+}
+function checkInt32(i, min2, max2) {
+  if (i !== ~~i || i < min2 || i > max2) {
+    throw Error(invalidArgument + i);
+  }
+}
+function checkRoundingDigits(d, i, rm, repeating) {
+  var di, k, r, rd;
+  for (k = d[0]; k >= 10; k /= 10)
+    --i;
+  if (--i < 0) {
+    i += LOG_BASE;
+    di = 0;
+  } else {
+    di = Math.ceil((i + 1) / LOG_BASE);
+    i %= LOG_BASE;
+  }
+  k = mathpow(10, LOG_BASE - i);
+  rd = d[di] % k | 0;
+  if (repeating == null) {
+    if (i < 3) {
+      if (i == 0)
+        rd = rd / 100 | 0;
+      else if (i == 1)
+        rd = rd / 10 | 0;
+      r = rm < 4 && rd == 99999 || rm > 3 && rd == 49999 || rd == 5e4 || rd == 0;
+    } else {
+      r = (rm < 4 && rd + 1 == k || rm > 3 && rd + 1 == k / 2) && (d[di + 1] / k / 100 | 0) == mathpow(10, i - 2) - 1 || (rd == k / 2 || rd == 0) && (d[di + 1] / k / 100 | 0) == 0;
+    }
+  } else {
+    if (i < 4) {
+      if (i == 0)
+        rd = rd / 1e3 | 0;
+      else if (i == 1)
+        rd = rd / 100 | 0;
+      else if (i == 2)
+        rd = rd / 10 | 0;
+      r = (repeating || rm < 4) && rd == 9999 || !repeating && rm > 3 && rd == 4999;
+    } else {
+      r = ((repeating || rm < 4) && rd + 1 == k || !repeating && rm > 3 && rd + 1 == k / 2) && (d[di + 1] / k / 1e3 | 0) == mathpow(10, i - 3) - 1;
+    }
+  }
+  return r;
+}
+function convertBase(str, baseIn, baseOut) {
+  var j, arr = [0], arrL, i = 0, strL = str.length;
+  for (; i < strL; ) {
+    for (arrL = arr.length; arrL--; )
+      arr[arrL] *= baseIn;
+    arr[0] += NUMERALS.indexOf(str.charAt(i++));
+    for (j = 0; j < arr.length; j++) {
+      if (arr[j] > baseOut - 1) {
+        if (arr[j + 1] === void 0)
+          arr[j + 1] = 0;
+        arr[j + 1] += arr[j] / baseOut | 0;
+        arr[j] %= baseOut;
+      }
+    }
+  }
+  return arr.reverse();
+}
+function cosine(Ctor, x) {
+  var k, len, y;
+  if (x.isZero())
+    return x;
+  len = x.d.length;
+  if (len < 32) {
+    k = Math.ceil(len / 3);
+    y = (1 / tinyPow(4, k)).toString();
+  } else {
+    k = 16;
+    y = "2.3283064365386962890625e-10";
+  }
+  Ctor.precision += k;
+  x = taylorSeries(Ctor, 1, x.times(y), new Ctor(1));
+  for (var i = k; i--; ) {
+    var cos2x = x.times(x);
+    x = cos2x.times(cos2x).minus(cos2x).times(8).plus(1);
+  }
+  Ctor.precision -= k;
+  return x;
+}
+var divide = function() {
+  function multiplyInteger(x, k, base) {
+    var temp, carry = 0, i = x.length;
+    for (x = x.slice(); i--; ) {
+      temp = x[i] * k + carry;
+      x[i] = temp % base | 0;
+      carry = temp / base | 0;
+    }
+    if (carry)
+      x.unshift(carry);
+    return x;
+  }
+  function compare(a, b2, aL, bL) {
+    var i, r;
+    if (aL != bL) {
+      r = aL > bL ? 1 : -1;
+    } else {
+      for (i = r = 0; i < aL; i++) {
+        if (a[i] != b2[i]) {
+          r = a[i] > b2[i] ? 1 : -1;
+          break;
+        }
+      }
+    }
+    return r;
+  }
+  function subtract(a, b2, aL, base) {
+    var i = 0;
+    for (; aL--; ) {
+      a[aL] -= i;
+      i = a[aL] < b2[aL] ? 1 : 0;
+      a[aL] = i * base + a[aL] - b2[aL];
+    }
+    for (; !a[0] && a.length > 1; )
+      a.shift();
+  }
+  return function(x, y, pr, rm, dp, base) {
+    var cmp, e, i, k, logBase, more, prod, prodL, q, qd, rem, remL, rem0, sd, t, xi, xL, yd0, yL, yz, Ctor = x.constructor, sign2 = x.s == y.s ? 1 : -1, xd = x.d, yd = y.d;
+    if (!xd || !xd[0] || !yd || !yd[0]) {
+      return new Ctor(
+        // Return NaN if either NaN, or both Infinity or 0.
+        !x.s || !y.s || (xd ? yd && xd[0] == yd[0] : !yd) ? NaN : (
+          // Return ±0 if x is 0 or y is ±Infinity, or return ±Infinity as y is 0.
+          xd && xd[0] == 0 || !yd ? sign2 * 0 : sign2 / 0
+        )
+      );
+    }
+    if (base) {
+      logBase = 1;
+      e = x.e - y.e;
+    } else {
+      base = BASE;
+      logBase = LOG_BASE;
+      e = mathfloor(x.e / logBase) - mathfloor(y.e / logBase);
+    }
+    yL = yd.length;
+    xL = xd.length;
+    q = new Ctor(sign2);
+    qd = q.d = [];
+    for (i = 0; yd[i] == (xd[i] || 0); i++)
+      ;
+    if (yd[i] > (xd[i] || 0))
+      e--;
+    if (pr == null) {
+      sd = pr = Ctor.precision;
+      rm = Ctor.rounding;
+    } else if (dp) {
+      sd = pr + (x.e - y.e) + 1;
+    } else {
+      sd = pr;
+    }
+    if (sd < 0) {
+      qd.push(1);
+      more = true;
+    } else {
+      sd = sd / logBase + 2 | 0;
+      i = 0;
+      if (yL == 1) {
+        k = 0;
+        yd = yd[0];
+        sd++;
+        for (; (i < xL || k) && sd--; i++) {
+          t = k * base + (xd[i] || 0);
+          qd[i] = t / yd | 0;
+          k = t % yd | 0;
+        }
+        more = k || i < xL;
+      } else {
+        k = base / (yd[0] + 1) | 0;
+        if (k > 1) {
+          yd = multiplyInteger(yd, k, base);
+          xd = multiplyInteger(xd, k, base);
+          yL = yd.length;
+          xL = xd.length;
+        }
+        xi = yL;
+        rem = xd.slice(0, yL);
+        remL = rem.length;
+        for (; remL < yL; )
+          rem[remL++] = 0;
+        yz = yd.slice();
+        yz.unshift(0);
+        yd0 = yd[0];
+        if (yd[1] >= base / 2)
+          ++yd0;
+        do {
+          k = 0;
+          cmp = compare(yd, rem, yL, remL);
+          if (cmp < 0) {
+            rem0 = rem[0];
+            if (yL != remL)
+              rem0 = rem0 * base + (rem[1] || 0);
+            k = rem0 / yd0 | 0;
+            if (k > 1) {
+              if (k >= base)
+                k = base - 1;
+              prod = multiplyInteger(yd, k, base);
+              prodL = prod.length;
+              remL = rem.length;
+              cmp = compare(prod, rem, prodL, remL);
+              if (cmp == 1) {
+                k--;
+                subtract(prod, yL < prodL ? yz : yd, prodL, base);
+              }
+            } else {
+              if (k == 0)
+                cmp = k = 1;
+              prod = yd.slice();
+            }
+            prodL = prod.length;
+            if (prodL < remL)
+              prod.unshift(0);
+            subtract(rem, prod, remL, base);
+            if (cmp == -1) {
+              remL = rem.length;
+              cmp = compare(yd, rem, yL, remL);
+              if (cmp < 1) {
+                k++;
+                subtract(rem, yL < remL ? yz : yd, remL, base);
+              }
+            }
+            remL = rem.length;
+          } else if (cmp === 0) {
+            k++;
+            rem = [0];
+          }
+          qd[i++] = k;
+          if (cmp && rem[0]) {
+            rem[remL++] = xd[xi] || 0;
+          } else {
+            rem = [xd[xi]];
+            remL = 1;
+          }
+        } while ((xi++ < xL || rem[0] !== void 0) && sd--);
+        more = rem[0] !== void 0;
+      }
+      if (!qd[0])
+        qd.shift();
+    }
+    if (logBase == 1) {
+      q.e = e;
+      inexact = more;
+    } else {
+      for (i = 1, k = qd[0]; k >= 10; k /= 10)
+        i++;
+      q.e = i + e * logBase - 1;
+      finalise(q, dp ? pr + q.e + 1 : pr, rm, more);
+    }
+    return q;
+  };
+}();
+function finalise(x, sd, rm, isTruncated) {
+  var digits, i, j, k, rd, roundUp, w, xd, xdi, Ctor = x.constructor;
+  out:
+    if (sd != null) {
+      xd = x.d;
+      if (!xd)
+        return x;
+      for (digits = 1, k = xd[0]; k >= 10; k /= 10)
+        digits++;
+      i = sd - digits;
+      if (i < 0) {
+        i += LOG_BASE;
+        j = sd;
+        w = xd[xdi = 0];
+        rd = w / mathpow(10, digits - j - 1) % 10 | 0;
+      } else {
+        xdi = Math.ceil((i + 1) / LOG_BASE);
+        k = xd.length;
+        if (xdi >= k) {
+          if (isTruncated) {
+            for (; k++ <= xdi; )
+              xd.push(0);
+            w = rd = 0;
+            digits = 1;
+            i %= LOG_BASE;
+            j = i - LOG_BASE + 1;
+          } else {
+            break out;
+          }
+        } else {
+          w = k = xd[xdi];
+          for (digits = 1; k >= 10; k /= 10)
+            digits++;
+          i %= LOG_BASE;
+          j = i - LOG_BASE + digits;
+          rd = j < 0 ? 0 : w / mathpow(10, digits - j - 1) % 10 | 0;
+        }
+      }
+      isTruncated = isTruncated || sd < 0 || xd[xdi + 1] !== void 0 || (j < 0 ? w : w % mathpow(10, digits - j - 1));
+      roundUp = rm < 4 ? (rd || isTruncated) && (rm == 0 || rm == (x.s < 0 ? 3 : 2)) : rd > 5 || rd == 5 && (rm == 4 || isTruncated || rm == 6 && // Check whether the digit to the left of the rounding digit is odd.
+      (i > 0 ? j > 0 ? w / mathpow(10, digits - j) : 0 : xd[xdi - 1]) % 10 & 1 || rm == (x.s < 0 ? 8 : 7));
+      if (sd < 1 || !xd[0]) {
+        xd.length = 0;
+        if (roundUp) {
+          sd -= x.e + 1;
+          xd[0] = mathpow(10, (LOG_BASE - sd % LOG_BASE) % LOG_BASE);
+          x.e = -sd || 0;
+        } else {
+          xd[0] = x.e = 0;
+        }
+        return x;
+      }
+      if (i == 0) {
+        xd.length = xdi;
+        k = 1;
+        xdi--;
+      } else {
+        xd.length = xdi + 1;
+        k = mathpow(10, LOG_BASE - i);
+        xd[xdi] = j > 0 ? (w / mathpow(10, digits - j) % mathpow(10, j) | 0) * k : 0;
+      }
+      if (roundUp) {
+        for (; ; ) {
+          if (xdi == 0) {
+            for (i = 1, j = xd[0]; j >= 10; j /= 10)
+              i++;
+            j = xd[0] += k;
+            for (k = 1; j >= 10; j /= 10)
+              k++;
+            if (i != k) {
+              x.e++;
+              if (xd[0] == BASE)
+                xd[0] = 1;
+            }
+            break;
+          } else {
+            xd[xdi] += k;
+            if (xd[xdi] != BASE)
+              break;
+            xd[xdi--] = 0;
+            k = 1;
+          }
+        }
+      }
+      for (i = xd.length; xd[--i] === 0; )
+        xd.pop();
+    }
+  if (external) {
+    if (x.e > Ctor.maxE) {
+      x.d = null;
+      x.e = NaN;
+    } else if (x.e < Ctor.minE) {
+      x.e = 0;
+      x.d = [0];
+    }
+  }
+  return x;
+}
+function finiteToString(x, isExp, sd) {
+  if (!x.isFinite())
+    return nonFiniteToString(x);
+  var k, e = x.e, str = digitsToString(x.d), len = str.length;
+  if (isExp) {
+    if (sd && (k = sd - len) > 0) {
+      str = str.charAt(0) + "." + str.slice(1) + getZeroString(k);
+    } else if (len > 1) {
+      str = str.charAt(0) + "." + str.slice(1);
+    }
+    str = str + (x.e < 0 ? "e" : "e+") + x.e;
+  } else if (e < 0) {
+    str = "0." + getZeroString(-e - 1) + str;
+    if (sd && (k = sd - len) > 0)
+      str += getZeroString(k);
+  } else if (e >= len) {
+    str += getZeroString(e + 1 - len);
+    if (sd && (k = sd - e - 1) > 0)
+      str = str + "." + getZeroString(k);
+  } else {
+    if ((k = e + 1) < len)
+      str = str.slice(0, k) + "." + str.slice(k);
+    if (sd && (k = sd - len) > 0) {
+      if (e + 1 === len)
+        str += ".";
+      str += getZeroString(k);
+    }
+  }
+  return str;
+}
+function getBase10Exponent(digits, e) {
+  var w = digits[0];
+  for (e *= LOG_BASE; w >= 10; w /= 10)
+    e++;
+  return e;
+}
+function getLn10(Ctor, sd, pr) {
+  if (sd > LN10_PRECISION) {
+    external = true;
+    if (pr)
+      Ctor.precision = pr;
+    throw Error(precisionLimitExceeded);
+  }
+  return finalise(new Ctor(LN10), sd, 1, true);
+}
+function getPi(Ctor, sd, rm) {
+  if (sd > PI_PRECISION)
+    throw Error(precisionLimitExceeded);
+  return finalise(new Ctor(PI), sd, rm, true);
+}
+function getPrecision(digits) {
+  var w = digits.length - 1, len = w * LOG_BASE + 1;
+  w = digits[w];
+  if (w) {
+    for (; w % 10 == 0; w /= 10)
+      len--;
+    for (w = digits[0]; w >= 10; w /= 10)
+      len++;
+  }
+  return len;
+}
+function getZeroString(k) {
+  var zs = "";
+  for (; k--; )
+    zs += "0";
+  return zs;
+}
+function intPow(Ctor, x, n2, pr) {
+  var isTruncated, r = new Ctor(1), k = Math.ceil(pr / LOG_BASE + 4);
+  external = false;
+  for (; ; ) {
+    if (n2 % 2) {
+      r = r.times(x);
+      if (truncate(r.d, k))
+        isTruncated = true;
+    }
+    n2 = mathfloor(n2 / 2);
+    if (n2 === 0) {
+      n2 = r.d.length - 1;
+      if (isTruncated && r.d[n2] === 0)
+        ++r.d[n2];
+      break;
+    }
+    x = x.times(x);
+    truncate(x.d, k);
+  }
+  external = true;
+  return r;
+}
+function isOdd(n2) {
+  return n2.d[n2.d.length - 1] & 1;
+}
+function maxOrMin(Ctor, args, n2) {
+  var k, y, x = new Ctor(args[0]), i = 0;
+  for (; ++i < args.length; ) {
+    y = new Ctor(args[i]);
+    if (!y.s) {
+      x = y;
+      break;
+    }
+    k = x.cmp(y);
+    if (k === n2 || k === 0 && x.s === n2) {
+      x = y;
+    }
+  }
+  return x;
+}
+function naturalExponential(x, sd) {
+  var denominator, guard, j, pow2, sum2, t, wpr, rep = 0, i = 0, k = 0, Ctor = x.constructor, rm = Ctor.rounding, pr = Ctor.precision;
+  if (!x.d || !x.d[0] || x.e > 17) {
+    return new Ctor(x.d ? !x.d[0] ? 1 : x.s < 0 ? 0 : 1 / 0 : x.s ? x.s < 0 ? 0 : x : 0 / 0);
+  }
+  if (sd == null) {
+    external = false;
+    wpr = pr;
+  } else {
+    wpr = sd;
+  }
+  t = new Ctor(0.03125);
+  while (x.e > -2) {
+    x = x.times(t);
+    k += 5;
+  }
+  guard = Math.log(mathpow(2, k)) / Math.LN10 * 2 + 5 | 0;
+  wpr += guard;
+  denominator = pow2 = sum2 = new Ctor(1);
+  Ctor.precision = wpr;
+  for (; ; ) {
+    pow2 = finalise(pow2.times(x), wpr, 1);
+    denominator = denominator.times(++i);
+    t = sum2.plus(divide(pow2, denominator, wpr, 1));
+    if (digitsToString(t.d).slice(0, wpr) === digitsToString(sum2.d).slice(0, wpr)) {
+      j = k;
+      while (j--)
+        sum2 = finalise(sum2.times(sum2), wpr, 1);
+      if (sd == null) {
+        if (rep < 3 && checkRoundingDigits(sum2.d, wpr - guard, rm, rep)) {
+          Ctor.precision = wpr += 10;
+          denominator = pow2 = t = new Ctor(1);
+          i = 0;
+          rep++;
+        } else {
+          return finalise(sum2, Ctor.precision = pr, rm, external = true);
+        }
+      } else {
+        Ctor.precision = pr;
+        return sum2;
+      }
+    }
+    sum2 = t;
+  }
+}
+function naturalLogarithm(y, sd) {
+  var c, c0, denominator, e, numerator, rep, sum2, t, wpr, x1, x2, n2 = 1, guard = 10, x = y, xd = x.d, Ctor = x.constructor, rm = Ctor.rounding, pr = Ctor.precision;
+  if (x.s < 0 || !xd || !xd[0] || !x.e && xd[0] == 1 && xd.length == 1) {
+    return new Ctor(xd && !xd[0] ? -1 / 0 : x.s != 1 ? NaN : xd ? 0 : x);
+  }
+  if (sd == null) {
+    external = false;
+    wpr = pr;
+  } else {
+    wpr = sd;
+  }
+  Ctor.precision = wpr += guard;
+  c = digitsToString(xd);
+  c0 = c.charAt(0);
+  if (Math.abs(e = x.e) < 15e14) {
+    while (c0 < 7 && c0 != 1 || c0 == 1 && c.charAt(1) > 3) {
+      x = x.times(y);
+      c = digitsToString(x.d);
+      c0 = c.charAt(0);
+      n2++;
+    }
+    e = x.e;
+    if (c0 > 1) {
+      x = new Ctor("0." + c);
+      e++;
+    } else {
+      x = new Ctor(c0 + "." + c.slice(1));
+    }
+  } else {
+    t = getLn10(Ctor, wpr + 2, pr).times(e + "");
+    x = naturalLogarithm(new Ctor(c0 + "." + c.slice(1)), wpr - guard).plus(t);
+    Ctor.precision = pr;
+    return sd == null ? finalise(x, pr, rm, external = true) : x;
+  }
+  x1 = x;
+  sum2 = numerator = x = divide(x.minus(1), x.plus(1), wpr, 1);
+  x2 = finalise(x.times(x), wpr, 1);
+  denominator = 3;
+  for (; ; ) {
+    numerator = finalise(numerator.times(x2), wpr, 1);
+    t = sum2.plus(divide(numerator, new Ctor(denominator), wpr, 1));
+    if (digitsToString(t.d).slice(0, wpr) === digitsToString(sum2.d).slice(0, wpr)) {
+      sum2 = sum2.times(2);
+      if (e !== 0)
+        sum2 = sum2.plus(getLn10(Ctor, wpr + 2, pr).times(e + ""));
+      sum2 = divide(sum2, new Ctor(n2), wpr, 1);
+      if (sd == null) {
+        if (checkRoundingDigits(sum2.d, wpr - guard, rm, rep)) {
+          Ctor.precision = wpr += guard;
+          t = numerator = x = divide(x1.minus(1), x1.plus(1), wpr, 1);
+          x2 = finalise(x.times(x), wpr, 1);
+          denominator = rep = 1;
+        } else {
+          return finalise(sum2, Ctor.precision = pr, rm, external = true);
+        }
+      } else {
+        Ctor.precision = pr;
+        return sum2;
+      }
+    }
+    sum2 = t;
+    denominator += 2;
+  }
+}
+function nonFiniteToString(x) {
+  return String(x.s * x.s / 0);
+}
+function parseDecimal(x, str) {
+  var e, i, len;
+  if ((e = str.indexOf(".")) > -1)
+    str = str.replace(".", "");
+  if ((i = str.search(/e/i)) > 0) {
+    if (e < 0)
+      e = i;
+    e += +str.slice(i + 1);
+    str = str.substring(0, i);
+  } else if (e < 0) {
+    e = str.length;
+  }
+  for (i = 0; str.charCodeAt(i) === 48; i++)
+    ;
+  for (len = str.length; str.charCodeAt(len - 1) === 48; --len)
+    ;
+  str = str.slice(i, len);
+  if (str) {
+    len -= i;
+    x.e = e = e - i - 1;
+    x.d = [];
+    i = (e + 1) % LOG_BASE;
+    if (e < 0)
+      i += LOG_BASE;
+    if (i < len) {
+      if (i)
+        x.d.push(+str.slice(0, i));
+      for (len -= LOG_BASE; i < len; )
+        x.d.push(+str.slice(i, i += LOG_BASE));
+      str = str.slice(i);
+      i = LOG_BASE - str.length;
+    } else {
+      i -= len;
+    }
+    for (; i--; )
+      str += "0";
+    x.d.push(+str);
+    if (external) {
+      if (x.e > x.constructor.maxE) {
+        x.d = null;
+        x.e = NaN;
+      } else if (x.e < x.constructor.minE) {
+        x.e = 0;
+        x.d = [0];
+      }
+    }
+  } else {
+    x.e = 0;
+    x.d = [0];
+  }
+  return x;
+}
+function parseOther(x, str) {
+  var base, Ctor, divisor, i, isFloat, len, p, xd, xe;
+  if (str.indexOf("_") > -1) {
+    str = str.replace(/(\d)_(?=\d)/g, "$1");
+    if (isDecimal.test(str))
+      return parseDecimal(x, str);
+  } else if (str === "Infinity" || str === "NaN") {
+    if (!+str)
+      x.s = NaN;
+    x.e = NaN;
+    x.d = null;
+    return x;
+  }
+  if (isHex.test(str)) {
+    base = 16;
+    str = str.toLowerCase();
+  } else if (isBinary.test(str)) {
+    base = 2;
+  } else if (isOctal.test(str)) {
+    base = 8;
+  } else {
+    throw Error(invalidArgument + str);
+  }
+  i = str.search(/p/i);
+  if (i > 0) {
+    p = +str.slice(i + 1);
+    str = str.substring(2, i);
+  } else {
+    str = str.slice(2);
+  }
+  i = str.indexOf(".");
+  isFloat = i >= 0;
+  Ctor = x.constructor;
+  if (isFloat) {
+    str = str.replace(".", "");
+    len = str.length;
+    i = len - i;
+    divisor = intPow(Ctor, new Ctor(base), i, i * 2);
+  }
+  xd = convertBase(str, base, BASE);
+  xe = xd.length - 1;
+  for (i = xe; xd[i] === 0; --i)
+    xd.pop();
+  if (i < 0)
+    return new Ctor(x.s * 0);
+  x.e = getBase10Exponent(xd, xe);
+  x.d = xd;
+  external = false;
+  if (isFloat)
+    x = divide(x, divisor, len * 4);
+  if (p)
+    x = x.times(Math.abs(p) < 54 ? mathpow(2, p) : Decimal.pow(2, p));
+  external = true;
+  return x;
+}
+function sine(Ctor, x) {
+  var k, len = x.d.length;
+  if (len < 3) {
+    return x.isZero() ? x : taylorSeries(Ctor, 2, x, x);
+  }
+  k = 1.4 * Math.sqrt(len);
+  k = k > 16 ? 16 : k | 0;
+  x = x.times(1 / tinyPow(5, k));
+  x = taylorSeries(Ctor, 2, x, x);
+  var sin2_x, d5 = new Ctor(5), d16 = new Ctor(16), d20 = new Ctor(20);
+  for (; k--; ) {
+    sin2_x = x.times(x);
+    x = x.times(d5.plus(sin2_x.times(d16.times(sin2_x).minus(d20))));
+  }
+  return x;
+}
+function taylorSeries(Ctor, n2, x, y, isHyperbolic) {
+  var j, t, u, x2, i = 1, pr = Ctor.precision, k = Math.ceil(pr / LOG_BASE);
+  external = false;
+  x2 = x.times(x);
+  u = new Ctor(y);
+  for (; ; ) {
+    t = divide(u.times(x2), new Ctor(n2++ * n2++), pr, 1);
+    u = isHyperbolic ? y.plus(t) : y.minus(t);
+    y = divide(t.times(x2), new Ctor(n2++ * n2++), pr, 1);
+    t = u.plus(y);
+    if (t.d[k] !== void 0) {
+      for (j = k; t.d[j] === u.d[j] && j--; )
+        ;
+      if (j == -1)
+        break;
+    }
+    j = u;
+    u = y;
+    y = t;
+    t = j;
+    i++;
+  }
+  external = true;
+  t.d.length = k + 1;
+  return t;
+}
+function tinyPow(b2, e) {
+  var n2 = b2;
+  while (--e)
+    n2 *= b2;
+  return n2;
+}
+function toLessThanHalfPi(Ctor, x) {
+  var t, isNeg = x.s < 0, pi = getPi(Ctor, Ctor.precision, 1), halfPi = pi.times(0.5);
+  x = x.abs();
+  if (x.lte(halfPi)) {
+    quadrant = isNeg ? 4 : 1;
+    return x;
+  }
+  t = x.divToInt(pi);
+  if (t.isZero()) {
+    quadrant = isNeg ? 3 : 2;
+  } else {
+    x = x.minus(t.times(pi));
+    if (x.lte(halfPi)) {
+      quadrant = isOdd(t) ? isNeg ? 2 : 3 : isNeg ? 4 : 1;
+      return x;
+    }
+    quadrant = isOdd(t) ? isNeg ? 1 : 4 : isNeg ? 3 : 2;
+  }
+  return x.minus(pi).abs();
+}
+function toStringBinary(x, baseOut, sd, rm) {
+  var base, e, i, k, len, roundUp, str, xd, y, Ctor = x.constructor, isExp = sd !== void 0;
+  if (isExp) {
+    checkInt32(sd, 1, MAX_DIGITS);
+    if (rm === void 0)
+      rm = Ctor.rounding;
+    else
+      checkInt32(rm, 0, 8);
+  } else {
+    sd = Ctor.precision;
+    rm = Ctor.rounding;
+  }
+  if (!x.isFinite()) {
+    str = nonFiniteToString(x);
+  } else {
+    str = finiteToString(x);
+    i = str.indexOf(".");
+    if (isExp) {
+      base = 2;
+      if (baseOut == 16) {
+        sd = sd * 4 - 3;
+      } else if (baseOut == 8) {
+        sd = sd * 3 - 2;
+      }
+    } else {
+      base = baseOut;
+    }
+    if (i >= 0) {
+      str = str.replace(".", "");
+      y = new Ctor(1);
+      y.e = str.length - i;
+      y.d = convertBase(finiteToString(y), 10, base);
+      y.e = y.d.length;
+    }
+    xd = convertBase(str, 10, base);
+    e = len = xd.length;
+    for (; xd[--len] == 0; )
+      xd.pop();
+    if (!xd[0]) {
+      str = isExp ? "0p+0" : "0";
+    } else {
+      if (i < 0) {
+        e--;
+      } else {
+        x = new Ctor(x);
+        x.d = xd;
+        x.e = e;
+        x = divide(x, y, sd, rm, 0, base);
+        xd = x.d;
+        e = x.e;
+        roundUp = inexact;
+      }
+      i = xd[sd];
+      k = base / 2;
+      roundUp = roundUp || xd[sd + 1] !== void 0;
+      roundUp = rm < 4 ? (i !== void 0 || roundUp) && (rm === 0 || rm === (x.s < 0 ? 3 : 2)) : i > k || i === k && (rm === 4 || roundUp || rm === 6 && xd[sd - 1] & 1 || rm === (x.s < 0 ? 8 : 7));
+      xd.length = sd;
+      if (roundUp) {
+        for (; ++xd[--sd] > base - 1; ) {
+          xd[sd] = 0;
+          if (!sd) {
+            ++e;
+            xd.unshift(1);
+          }
+        }
+      }
+      for (len = xd.length; !xd[len - 1]; --len)
+        ;
+      for (i = 0, str = ""; i < len; i++)
+        str += NUMERALS.charAt(xd[i]);
+      if (isExp) {
+        if (len > 1) {
+          if (baseOut == 16 || baseOut == 8) {
+            i = baseOut == 16 ? 4 : 3;
+            for (--len; len % i; len++)
+              str += "0";
+            xd = convertBase(str, base, baseOut);
+            for (len = xd.length; !xd[len - 1]; --len)
+              ;
+            for (i = 1, str = "1."; i < len; i++)
+              str += NUMERALS.charAt(xd[i]);
+          } else {
+            str = str.charAt(0) + "." + str.slice(1);
+          }
+        }
+        str = str + (e < 0 ? "p" : "p+") + e;
+      } else if (e < 0) {
+        for (; ++e; )
+          str = "0" + str;
+        str = "0." + str;
+      } else {
+        if (++e > len)
+          for (e -= len; e--; )
+            str += "0";
+        else if (e < len)
+          str = str.slice(0, e) + "." + str.slice(e);
+      }
+    }
+    str = (baseOut == 16 ? "0x" : baseOut == 2 ? "0b" : baseOut == 8 ? "0o" : "") + str;
+  }
+  return x.s < 0 ? "-" + str : str;
+}
+function truncate(arr, len) {
+  if (arr.length > len) {
+    arr.length = len;
+    return true;
+  }
+}
+function abs(x) {
+  return new this(x).abs();
+}
+function acos(x) {
+  return new this(x).acos();
+}
+function acosh(x) {
+  return new this(x).acosh();
+}
+function add(x, y) {
+  return new this(x).plus(y);
+}
+function asin(x) {
+  return new this(x).asin();
+}
+function asinh(x) {
+  return new this(x).asinh();
+}
+function atan(x) {
+  return new this(x).atan();
+}
+function atanh(x) {
+  return new this(x).atanh();
+}
+function atan2(y, x) {
+  y = new this(y);
+  x = new this(x);
+  var r, pr = this.precision, rm = this.rounding, wpr = pr + 4;
+  if (!y.s || !x.s) {
+    r = new this(NaN);
+  } else if (!y.d && !x.d) {
+    r = getPi(this, wpr, 1).times(x.s > 0 ? 0.25 : 0.75);
+    r.s = y.s;
+  } else if (!x.d || y.isZero()) {
+    r = x.s < 0 ? getPi(this, pr, rm) : new this(0);
+    r.s = y.s;
+  } else if (!y.d || x.isZero()) {
+    r = getPi(this, wpr, 1).times(0.5);
+    r.s = y.s;
+  } else if (x.s < 0) {
+    this.precision = wpr;
+    this.rounding = 1;
+    r = this.atan(divide(y, x, wpr, 1));
+    x = getPi(this, wpr, 1);
+    this.precision = pr;
+    this.rounding = rm;
+    r = y.s < 0 ? r.minus(x) : r.plus(x);
+  } else {
+    r = this.atan(divide(y, x, wpr, 1));
+  }
+  return r;
+}
+function cbrt(x) {
+  return new this(x).cbrt();
+}
+function ceil(x) {
+  return finalise(x = new this(x), x.e + 1, 2);
+}
+function clamp(x, min2, max2) {
+  return new this(x).clamp(min2, max2);
+}
+function config(obj) {
+  if (!obj || typeof obj !== "object")
+    throw Error(decimalError + "Object expected");
+  var i, p, v, useDefaults = obj.defaults === true, ps = [
+    "precision",
+    1,
+    MAX_DIGITS,
+    "rounding",
+    0,
+    8,
+    "toExpNeg",
+    -EXP_LIMIT,
+    0,
+    "toExpPos",
+    0,
+    EXP_LIMIT,
+    "maxE",
+    0,
+    EXP_LIMIT,
+    "minE",
+    -EXP_LIMIT,
+    0,
+    "modulo",
+    0,
+    9
+  ];
+  for (i = 0; i < ps.length; i += 3) {
+    if (p = ps[i], useDefaults)
+      this[p] = DEFAULTS[p];
+    if ((v = obj[p]) !== void 0) {
+      if (mathfloor(v) === v && v >= ps[i + 1] && v <= ps[i + 2])
+        this[p] = v;
+      else
+        throw Error(invalidArgument + p + ": " + v);
+    }
+  }
+  if (p = "crypto", useDefaults)
+    this[p] = DEFAULTS[p];
+  if ((v = obj[p]) !== void 0) {
+    if (v === true || v === false || v === 0 || v === 1) {
+      if (v) {
+        if (typeof crypto != "undefined" && crypto && (crypto.getRandomValues || crypto.randomBytes)) {
+          this[p] = true;
+        } else {
+          throw Error(cryptoUnavailable);
+        }
+      } else {
+        this[p] = false;
+      }
+    } else {
+      throw Error(invalidArgument + p + ": " + v);
+    }
+  }
+  return this;
+}
+function cos(x) {
+  return new this(x).cos();
+}
+function cosh(x) {
+  return new this(x).cosh();
+}
+function clone(obj) {
+  var i, p, ps;
+  function Decimal2(v) {
+    var e, i2, t, x = this;
+    if (!(x instanceof Decimal2))
+      return new Decimal2(v);
+    x.constructor = Decimal2;
+    if (isDecimalInstance(v)) {
+      x.s = v.s;
+      if (external) {
+        if (!v.d || v.e > Decimal2.maxE) {
+          x.e = NaN;
+          x.d = null;
+        } else if (v.e < Decimal2.minE) {
+          x.e = 0;
+          x.d = [0];
+        } else {
+          x.e = v.e;
+          x.d = v.d.slice();
+        }
+      } else {
+        x.e = v.e;
+        x.d = v.d ? v.d.slice() : v.d;
+      }
+      return;
+    }
+    t = typeof v;
+    if (t === "number") {
+      if (v === 0) {
+        x.s = 1 / v < 0 ? -1 : 1;
+        x.e = 0;
+        x.d = [0];
+        return;
+      }
+      if (v < 0) {
+        v = -v;
+        x.s = -1;
+      } else {
+        x.s = 1;
+      }
+      if (v === ~~v && v < 1e7) {
+        for (e = 0, i2 = v; i2 >= 10; i2 /= 10)
+          e++;
+        if (external) {
+          if (e > Decimal2.maxE) {
+            x.e = NaN;
+            x.d = null;
+          } else if (e < Decimal2.minE) {
+            x.e = 0;
+            x.d = [0];
+          } else {
+            x.e = e;
+            x.d = [v];
+          }
+        } else {
+          x.e = e;
+          x.d = [v];
+        }
+        return;
+      }
+      if (v * 0 !== 0) {
+        if (!v)
+          x.s = NaN;
+        x.e = NaN;
+        x.d = null;
+        return;
+      }
+      return parseDecimal(x, v.toString());
+    }
+    if (t === "string") {
+      if ((i2 = v.charCodeAt(0)) === 45) {
+        v = v.slice(1);
+        x.s = -1;
+      } else {
+        if (i2 === 43)
+          v = v.slice(1);
+        x.s = 1;
+      }
+      return isDecimal.test(v) ? parseDecimal(x, v) : parseOther(x, v);
+    }
+    if (t === "bigint") {
+      if (v < 0) {
+        v = -v;
+        x.s = -1;
+      } else {
+        x.s = 1;
+      }
+      return parseDecimal(x, v.toString());
+    }
+    throw Error(invalidArgument + v);
+  }
+  Decimal2.prototype = P;
+  Decimal2.ROUND_UP = 0;
+  Decimal2.ROUND_DOWN = 1;
+  Decimal2.ROUND_CEIL = 2;
+  Decimal2.ROUND_FLOOR = 3;
+  Decimal2.ROUND_HALF_UP = 4;
+  Decimal2.ROUND_HALF_DOWN = 5;
+  Decimal2.ROUND_HALF_EVEN = 6;
+  Decimal2.ROUND_HALF_CEIL = 7;
+  Decimal2.ROUND_HALF_FLOOR = 8;
+  Decimal2.EUCLID = 9;
+  Decimal2.config = Decimal2.set = config;
+  Decimal2.clone = clone;
+  Decimal2.isDecimal = isDecimalInstance;
+  Decimal2.abs = abs;
+  Decimal2.acos = acos;
+  Decimal2.acosh = acosh;
+  Decimal2.add = add;
+  Decimal2.asin = asin;
+  Decimal2.asinh = asinh;
+  Decimal2.atan = atan;
+  Decimal2.atanh = atanh;
+  Decimal2.atan2 = atan2;
+  Decimal2.cbrt = cbrt;
+  Decimal2.ceil = ceil;
+  Decimal2.clamp = clamp;
+  Decimal2.cos = cos;
+  Decimal2.cosh = cosh;
+  Decimal2.div = div;
+  Decimal2.exp = exp;
+  Decimal2.floor = floor;
+  Decimal2.hypot = hypot;
+  Decimal2.ln = ln;
+  Decimal2.log = log;
+  Decimal2.log10 = log10;
+  Decimal2.log2 = log2;
+  Decimal2.max = max;
+  Decimal2.min = min;
+  Decimal2.mod = mod;
+  Decimal2.mul = mul;
+  Decimal2.pow = pow;
+  Decimal2.random = random;
+  Decimal2.round = round;
+  Decimal2.sign = sign;
+  Decimal2.sin = sin;
+  Decimal2.sinh = sinh;
+  Decimal2.sqrt = sqrt;
+  Decimal2.sub = sub;
+  Decimal2.sum = sum;
+  Decimal2.tan = tan;
+  Decimal2.tanh = tanh;
+  Decimal2.trunc = trunc;
+  if (obj === void 0)
+    obj = {};
+  if (obj) {
+    if (obj.defaults !== true) {
+      ps = ["precision", "rounding", "toExpNeg", "toExpPos", "maxE", "minE", "modulo", "crypto"];
+      for (i = 0; i < ps.length; )
+        if (!obj.hasOwnProperty(p = ps[i++]))
+          obj[p] = this[p];
+    }
+  }
+  Decimal2.config(obj);
+  return Decimal2;
+}
+function div(x, y) {
+  return new this(x).div(y);
+}
+function exp(x) {
+  return new this(x).exp();
+}
+function floor(x) {
+  return finalise(x = new this(x), x.e + 1, 3);
+}
+function hypot() {
+  var i, n2, t = new this(0);
+  external = false;
+  for (i = 0; i < arguments.length; ) {
+    n2 = new this(arguments[i++]);
+    if (!n2.d) {
+      if (n2.s) {
+        external = true;
+        return new this(1 / 0);
+      }
+      t = n2;
+    } else if (t.d) {
+      t = t.plus(n2.times(n2));
+    }
+  }
+  external = true;
+  return t.sqrt();
+}
+function isDecimalInstance(obj) {
+  return obj instanceof Decimal || obj && obj.toStringTag === tag || false;
+}
+function ln(x) {
+  return new this(x).ln();
+}
+function log(x, y) {
+  return new this(x).log(y);
+}
+function log2(x) {
+  return new this(x).log(2);
+}
+function log10(x) {
+  return new this(x).log(10);
+}
+function max() {
+  return maxOrMin(this, arguments, -1);
+}
+function min() {
+  return maxOrMin(this, arguments, 1);
+}
+function mod(x, y) {
+  return new this(x).mod(y);
+}
+function mul(x, y) {
+  return new this(x).mul(y);
+}
+function pow(x, y) {
+  return new this(x).pow(y);
+}
+function random(sd) {
+  var d, e, k, n2, i = 0, r = new this(1), rd = [];
+  if (sd === void 0)
+    sd = this.precision;
+  else
+    checkInt32(sd, 1, MAX_DIGITS);
+  k = Math.ceil(sd / LOG_BASE);
+  if (!this.crypto) {
+    for (; i < k; )
+      rd[i++] = Math.random() * 1e7 | 0;
+  } else if (crypto.getRandomValues) {
+    d = crypto.getRandomValues(new Uint32Array(k));
+    for (; i < k; ) {
+      n2 = d[i];
+      if (n2 >= 429e7) {
+        d[i] = crypto.getRandomValues(new Uint32Array(1))[0];
+      } else {
+        rd[i++] = n2 % 1e7;
+      }
+    }
+  } else if (crypto.randomBytes) {
+    d = crypto.randomBytes(k *= 4);
+    for (; i < k; ) {
+      n2 = d[i] + (d[i + 1] << 8) + (d[i + 2] << 16) + ((d[i + 3] & 127) << 24);
+      if (n2 >= 214e7) {
+        crypto.randomBytes(4).copy(d, i);
+      } else {
+        rd.push(n2 % 1e7);
+        i += 4;
+      }
+    }
+    i = k / 4;
+  } else {
+    throw Error(cryptoUnavailable);
+  }
+  k = rd[--i];
+  sd %= LOG_BASE;
+  if (k && sd) {
+    n2 = mathpow(10, LOG_BASE - sd);
+    rd[i] = (k / n2 | 0) * n2;
+  }
+  for (; rd[i] === 0; i--)
+    rd.pop();
+  if (i < 0) {
+    e = 0;
+    rd = [0];
+  } else {
+    e = -1;
+    for (; rd[0] === 0; e -= LOG_BASE)
+      rd.shift();
+    for (k = 1, n2 = rd[0]; n2 >= 10; n2 /= 10)
+      k++;
+    if (k < LOG_BASE)
+      e -= LOG_BASE - k;
+  }
+  r.e = e;
+  r.d = rd;
+  return r;
+}
+function round(x) {
+  return finalise(x = new this(x), x.e + 1, this.rounding);
+}
+function sign(x) {
+  x = new this(x);
+  return x.d ? x.d[0] ? x.s : 0 * x.s : x.s || NaN;
+}
+function sin(x) {
+  return new this(x).sin();
+}
+function sinh(x) {
+  return new this(x).sinh();
+}
+function sqrt(x) {
+  return new this(x).sqrt();
+}
+function sub(x, y) {
+  return new this(x).sub(y);
+}
+function sum() {
+  var i = 0, args = arguments, x = new this(args[i]);
+  external = false;
+  for (; x.s && ++i < args.length; )
+    x = x.plus(args[i]);
+  external = true;
+  return finalise(x, this.precision, this.rounding);
+}
+function tan(x) {
+  return new this(x).tan();
+}
+function tanh(x) {
+  return new this(x).tanh();
+}
+function trunc(x) {
+  return finalise(x = new this(x), x.e + 1, 1);
+}
+P[Symbol.for("nodejs.util.inspect.custom")] = P.toString;
+P[Symbol.toStringTag] = "Decimal";
+var Decimal = P.constructor = clone(DEFAULTS);
+LN10 = new Decimal(LN10);
+PI = new Decimal(PI);
+
 // apps/rebalancer/fork/replay/policies.ts
 var LIVE = {
   capPercent: 60,
@@ -25601,7 +25672,7 @@ var LIVE = {
 };
 var RAY_DECIMAL = new Decimal(10).pow(27);
 function anomalyGate(input, config3) {
-  const window = input.recorded.filter(({ t }) => t < input.t && t > input.t - config3.smaWindowSeconds);
+  const window = input.recorded.filter(({ t }) => t < input.t && t >= input.t - config3.smaWindowSeconds);
   return input.spots.map((rate, i) => {
     if (window.length < config3.minSamples)
       return false;
@@ -25692,9 +25763,9 @@ function excludeAnomalous(distribution, anomalous, config3, reapply) {
         adjusted[index] += excess - given;
         return;
       }
-      const share = Math.floor(adjusted[index] / remainingTotal * excess);
-      adjusted[index] += share;
-      given += share;
+      const share2 = Math.floor(adjusted[index] / remainingTotal * excess);
+      adjusted[index] += share2;
+      given += share2;
     });
   }
   if (!reapply)
@@ -25789,6 +25860,90 @@ function decideNew(input, config3 = LIVE) {
   const legs = buildMoveInstructions(input.balances, distribution, config3);
   return { stop: legs.length === 0 ? "no legs" : null, anomalous, distribution, deltaPercent, signals, legs };
 }
+var XC = {
+  capBps: 6e3,
+  maxShareOfMarketBps: 1e3,
+  intraMinGainBps: 5,
+  horizonDays: 7,
+  hysteresisK: 2,
+  gasCost: 100000n,
+  minMove: 1000000000n,
+  persistenceRuns: 2
+};
+var LEG_DUST = 10000000n;
+function decideWaterFill(input, config3 = XC) {
+  const total = input.balances.reduce((sum2, b2) => sum2 + b2, 0n);
+  const curves = input.spots.map((spot, i) => {
+    const byBps = total * BigInt(config3.capBps - 1) / 10000n;
+    const byMarket = input.marketSizes[i] * BigInt(config3.maxShareOfMarketBps) / 10000n;
+    return {
+      spot,
+      signal: input.signals[i],
+      held: input.balances[i],
+      alpha: input.alphas[i],
+      marketSize: input.marketSizes[i],
+      cap: byBps < byMarket ? byBps : byMarket
+    };
+  });
+  const targets = total > 0n ? solveWaterFilling(curves, input.entry, total).amounts : input.balances.map(() => 0n);
+  const senders = input.balances.map((b2, index) => ({ index, excess: b2 - targets[index] })).filter((e) => e.excess > 0n).sort((a, b2) => b2.excess > a.excess ? 1 : b2.excess < a.excess ? -1 : 0);
+  const receivers = input.balances.map((b2, index) => ({ index, deficit: targets[index] - b2 })).filter((e) => e.deficit > 0n).sort((a, b2) => b2.deficit > a.deficit ? 1 : b2.deficit < a.deficit ? -1 : 0);
+  const built = [];
+  for (let s = 0, r = 0; s < senders.length && r < receivers.length; ) {
+    const amount = senders[s].excess < receivers[r].deficit ? senders[s].excess : receivers[r].deficit;
+    if (amount > 0n)
+      built.push({ from: senders[s].index, to: receivers[r].index, amount });
+    senders[s].excess -= amount;
+    receivers[r].deficit -= amount;
+    if (senders[s].excess <= 0n)
+      s++;
+    if (receivers[r].deficit <= 0n)
+      r++;
+  }
+  const value = (legs2) => {
+    const after2 = [...input.balances];
+    for (const leg of legs2) {
+      after2[leg.from] -= leg.amount;
+      after2[leg.to] += leg.amount;
+    }
+    const gain2 = allocationGain(curves, after2, input.balances);
+    return { after: after2, gain: gain2, deltaPercent: total === 0n ? 0 : gain2 / Number(total) * 100 };
+  };
+  const legs = built.filter((leg) => leg.amount >= LEG_DUST);
+  const moved = legs.reduce((sum2, leg) => sum2 + leg.amount, 0n);
+  const { after, gain, deltaPercent } = value(legs);
+  const ranked = moved > 0n && moved >= config3.minMove && gain >= Number(total) * config3.intraMinGainBps / 1e4 && gain * config3.horizonDays / 365 > Number(config3.gasCost) * config3.hysteresisK;
+  let previous = null;
+  if (ranked) {
+    const side = (sign2) => after.map((amount, i) => (amount - input.balances[i]) * sign2 >= config3.minMove ? i : -1).filter((i) => i >= 0).join(",");
+    const fingerprint = `in:${side(1n)}|out:${side(-1n)}`;
+    previous = { fingerprint, count: input.previous?.fingerprint === fingerprint ? input.previous.count + 1 : 1 };
+    if (previous.count >= config3.persistenceRuns)
+      return { legs, previous, deltaPercent, stop: null };
+  }
+  const left = /* @__PURE__ */ new Map();
+  input.balances.forEach((balance, i) => {
+    if (i !== input.entry && balance * 10000n > total * BigInt(config3.capBps))
+      left.set(i, balance - total * BigInt(config3.capBps - 1) / 10000n);
+  });
+  const restore = [];
+  for (const leg of built) {
+    const room = left.get(leg.from) ?? 0n;
+    const amount = leg.amount < room ? leg.amount : room;
+    if (amount <= 0n)
+      continue;
+    left.set(leg.from, room - amount);
+    restore.push({ ...leg, amount });
+  }
+  if (restore.length > 0)
+    return { legs: restore, previous, deltaPercent: value(restore).deltaPercent, stop: null, restore: true };
+  return {
+    legs: [],
+    previous,
+    deltaPercent,
+    stop: previous ? `run ${previous.count} of ${config3.persistenceRuns}` : "below threshold"
+  };
+}
 
 // scripts/tangem/simulate.ts
 var config2 = JSON.parse((0, import_fs.readFileSync)(process.argv[2], "utf8"));
@@ -25799,6 +25954,7 @@ var RAY2 = 1e27;
 var DAY = 86400;
 var YEAR = 365 * DAY;
 var REBALANCE_GAS_PER_LEG = 982930;
+var PROBES = [4e6, 6e6, 1e7];
 function loadSamples() {
   const from = Date.parse(config2.start_date) / 1e3;
   const to = Date.parse(config2.end_date) / 1e3;
@@ -25810,16 +25966,24 @@ function loadSamples() {
     return {
       t: number2("timestamp"),
       venues: config2.providers.map((name) => {
+        for (const field of ["rate", "supplied", "liquidity"]) {
+          if (number2(`${name}.index`) > 0 && values[`${name}.${field}`] == null)
+            throw new Error(`${name}.${field} has no reading on ${dayOf(number2("timestamp"))}`);
+        }
         const rate = number2(`${name}.rate`) / RAY2;
         const curve = [[0, rate]];
-        for (const millions of [4, 6, 10]) {
-          const after = values[`${name}.rateAfter${millions}`];
+        const refused = [];
+        for (const size of PROBES) {
+          const after = values[`${name}.rateAfter${size / 1e6}`];
           if (after != null)
-            curve.push([millions * 1e6, Number(after) / RAY2]);
+            curve.push([size, Number(after) / RAY2]);
+          else
+            refused.push(size);
         }
         return {
           rate,
           curve,
+          refused,
           index: number2(`${name}.index`),
           liquidity: number2(`${name}.liquidity`) / USDC,
           supplied: number2(`${name}.supplied`) / USDC
@@ -25841,9 +26005,42 @@ function rateAt(venue, position) {
   const [x1, r1] = curve[k];
   return Math.max(0, r0 + (r1 - r0) * (position - x0) / (x1 - x0));
 }
+function refusesDeposit(venue, position) {
+  const probe = PROBES.find((size) => size >= position) ?? PROBES[PROBES.length - 1];
+  return venue.index === 0 || venue.refused.includes(probe);
+}
+var productionExponent = (provider) => ["AaveV3Provider", "CompoundV3Provider"].includes(provider) ? 2 : 1.75;
+function measuredExponent(venue) {
+  const size = PROBES[PROBES.length - 1];
+  const probe = venue.curve.find(([position]) => position === size);
+  if (!probe || !(venue.rate > 0) || !(venue.supplied > 0))
+    return null;
+  if (probe[1] >= venue.rate)
+    return 0;
+  if (probe[1] <= 0)
+    return 10;
+  return Math.min(10, Math.log(venue.rate / probe[1]) / Math.log((venue.supplied + size) / venue.supplied));
+}
 var dayOf = (t) => new Date(t * 1e3).toISOString().slice(0, 10);
 var label = (provider) => config2.labels[provider] ?? provider;
+var inSet = (provider, t) => config2.eligible_periods === void 0 || (config2.eligible_periods[provider] ?? []).some(([from, to]) => dayOf(t) >= from && dayOf(t) < to);
+var boundaries = [...new Set(Object.values(config2.eligible_periods ?? {}).flat(2))];
 var trigger = Date.parse(config2.stress.trigger_date) / 1e3;
+var BARRED = {
+  no_reading: "forced exit: the venue has no reading",
+  outside_set: "forced exit: the venue is not in the set",
+  too_small: "forced exit: the venue is too small for a full position"
+};
+var shutAt = (sample, i, fullPosition) => config2.liquidity_rule === true && sample.venues[i].liquidity < fullPosition;
+function barredAt(sample, i, fullPosition) {
+  const venue = sample.venues[i];
+  if (venue.index === 0)
+    return "no_reading";
+  if (!inSet(config2.providers[i], sample.t))
+    return "outside_set";
+  const tooSmall = config2.max_share_of_venue_percent !== void 0 && fullPosition > (venue.supplied + fullPosition) * config2.max_share_of_venue_percent / 100;
+  return tooSmall ? "too_small" : null;
+}
 function largest(positions, only) {
   let best = -1;
   positions.forEach((position, i) => {
@@ -25855,13 +26052,11 @@ function largest(positions, only) {
   return best;
 }
 function resolveTarget(provider, positions) {
-  if (provider === "largest")
-    return largest(positions);
-  if (provider === "largest_morpho")
-    return largest(positions, (name) => name.includes("Morpho"));
-  const index = config2.providers.indexOf(provider);
+  const index = provider === "largest" ? largest(positions) : provider === "largest_morpho" ? largest(positions, (name) => name.includes("Morpho") && !name.includes("Market")) : config2.providers.indexOf(provider);
   if (index < 0)
     throw new Error(`Stress provider ${provider} is not among the simulated providers`);
+  if (!(positions[index] > 2))
+    throw new Error(`Stress provider ${provider}: the vault holds nothing in ${config2.providers[index]} that day`);
   return index;
 }
 var pathConfig = config2.risk_guard_enabled ? {
@@ -25869,32 +26064,87 @@ var pathConfig = config2.risk_guard_enabled ? {
   capPercent: config2.provider_cap_percent ?? LIVE.capPercent,
   minActive: config2.min_active_providers ?? LIVE.minActive
 } : { ...LIVE, capPercent: 100, minActive: 1, maxDeviationPercent: Infinity, cooldownSeconds: 0 };
+var waterFill = {
+  ...XC,
+  capBps: pathConfig.capPercent * 100,
+  maxShareOfMarketBps: config2.max_share_of_venue_percent === void 0 ? XC.maxShareOfMarketBps : config2.max_share_of_venue_percent * 100
+};
+function legsTo(positions, targets) {
+  const least = Number(pathConfig.minTarget) / USDC;
+  const excess = positions.map((position, i) => position - targets[i]);
+  const legs = [];
+  for (let from = 0, to = 0; ; ) {
+    while (from < excess.length && excess[from] <= least)
+      from++;
+    while (to < excess.length && excess[to] >= -least)
+      to++;
+    if (from === excess.length || to === excess.length)
+      return legs;
+    const amount = Math.min(excess[from], -excess[to]);
+    legs.push({ from, to, amount });
+    excess[from] -= amount;
+    excess[to] += amount;
+  }
+}
 function simulate(samples, strategy, scenario) {
   const n2 = config2.providers.length;
+  const everyVenue = config2.providers.map((_, i) => i);
   const positions = new Array(n2).fill(0);
+  const takes = (i, deposit) => !refusesDeposit(samples[0].venues[i], deposit);
   let bestVault;
   if (strategy === "thesauros_simple" || strategy === "first_split_held") {
-    positions[config2.providers.indexOf(config2.entry_provider)] = config2.initial_deposit;
+    const entry = config2.providers.indexOf(config2.entry_provider);
+    const why = barredAt(samples[0], entry, config2.initial_deposit * pathConfig.capPercent / 100);
+    if (why)
+      throw new Error(`entry_provider ${config2.entry_provider} takes no money at the first reading: ${why}`);
+    if (shutAt(samples[0], entry, config2.initial_deposit * pathConfig.capPercent / 100))
+      throw new Error(
+        `entry_provider ${config2.entry_provider} has less free liquidity than a full position at the first reading`
+      );
+    positions[entry] = config2.initial_deposit;
   } else if (strategy === "just_aave") {
     positions[config2.providers.indexOf(config2.aave_provider)] = config2.initial_deposit;
+  } else if (strategy === "eligible_equal_weight") {
+    const fullPosition = config2.initial_deposit * pathConfig.capPercent / 100;
+    let open = positions.map((_, i) => i).filter((i) => !barredAt(samples[0], i, fullPosition) && !shutAt(samples[0], i, fullPosition));
+    while (open.some((i) => !takes(i, config2.initial_deposit / open.length))) {
+      open = open.filter((i) => takes(i, config2.initial_deposit / open.length));
+    }
+    if (open.length === 0)
+      throw new Error("eligible_equal_weight: no provider takes money at the first reading");
+    open.forEach((i) => positions[i] = config2.initial_deposit / open.length);
   } else {
-    const best = samples[0].venues.reduce((top, venue, i, all) => venue.rate > all[top].rate ? i : top, 0);
+    const rate = (i) => inSet(config2.providers[i], samples[0].t) && takes(i, config2.initial_deposit) ? samples[0].venues[i].rate : -1;
+    const best = samples[0].venues.reduce((top, _venue, i) => rate(i) > rate(top) ? i : top, 0);
+    if (rate(best) < 0)
+      throw new Error("just_best_vault: no provider in the set takes the deposit on the first day");
     positions[best] = config2.initial_deposit;
     bestVault = label(config2.providers[best]);
   }
+  positions.forEach((position, i) => {
+    if (position > 0 && !takes(i, position))
+      throw new Error(`${strategy}: ${config2.providers[i]} does not take the deposit at the first reading`);
+  });
   const total = () => positions.reduce((sum2, position) => sum2 + position, 0);
   const apr = (sample) => {
     const sum2 = total();
     return sum2 === 0 ? 0 : positions.reduce((acc, p, i) => acc + p * rateAt(sample.venues[i], p), 0) / sum2;
   };
   const seen = [];
+  const readSince = new Array(n2).fill(Infinity);
+  const dilution = new Array(n2).fill(1);
+  let split2 = null;
+  const exponents = config2.providers.map(productionExponent);
+  let proposed = null;
+  const decisions = [];
   const days = [];
   const moves = [];
   let lastMoveAt = null;
   let previousTotal = total();
   let peak = total();
   let dayStart = total();
-  let day = { rebalances: 0, gasWei: 0, gasUsd: 0 };
+  const newDay = () => ({ rebalances: 0, refused: 0, gasWei: 0, gasUsd: 0, interest: new Array(n2).fill(0) });
+  let day = newDay();
   let lowestPayable = 1;
   let dead = -1;
   let frozenUntil = 0;
@@ -25915,91 +26165,176 @@ function simulate(samples, strategy, scenario) {
       } else if (scenario.kind === "withdrawal_freeze") {
         scenario.target = resolveTarget(stress.withdrawal_freeze.provider, positions);
         frozenUntil = sample.t + stress.withdrawal_freeze.days * DAY;
+        scenario.frozen = [sample.t, frozenUntil];
       }
     }
     const frozen = scenario?.kind === "withdrawal_freeze" && fired && sample.t < frozenUntil ? scenario.target : -1;
     const fullPosition = total() * pathConfig.capPercent / 100;
-    const tooSmall = (venue) => config2.max_share_of_venue_percent !== void 0 && fullPosition > (venue.supplied + fullPosition) * config2.max_share_of_venue_percent / 100;
+    const barred = (i) => barredAt(sample, i, fullPosition);
+    const shut = (i) => shutAt(sample, i, fullPosition);
+    sample.venues.forEach((venue, i) => readSince[i] = venue.index > 0 ? Math.min(readSince[i], sample.t) : Infinity);
+    const payableBy = (i) => {
+      const { liquidity, supplied } = sample.venues[i];
+      if (i === frozen || i === dead)
+        return 0;
+      if (config2.rate_impact_enabled)
+        return liquidity + positions[i];
+      return supplied === 0 ? 0 : liquidity * (1 + positions[i] / supplied);
+    };
+    const executable = (legs) => {
+      const out = new Array(n2).fill(0);
+      const into = new Array(n2).fill(0);
+      return legs.filter(({ from, to, amount }) => {
+        const can = out[from] + amount <= payableBy(from) && !refusesDeposit(sample.venues[to], positions[to] + into[to] + amount);
+        if (can) {
+          out[from] += amount;
+          into[to] += amount;
+        }
+        return can;
+      });
+    };
+    const execute = (legs, transactions, expectedGain, restore) => {
+      const aprBefore = apr(sample);
+      const gasWei = config2.gas_modeling_enabled ? sample.legGas[0] * legs.length + sample.l1Fee[0] * transactions : 0;
+      const gasUsd = config2.gas_modeling_enabled ? sample.legGas[1] * legs.length + sample.l1Fee[1] * transactions : 0;
+      for (const leg of legs) {
+        if (barred(leg.to) || shut(leg.to))
+          throw new Error(`a leg enters ${config2.providers[leg.to]}, which takes no money`);
+        positions[leg.from] -= leg.amount;
+        positions[leg.to] += leg.amount;
+        if (positions[leg.from] < 0 && positions[leg.from] > -1e-6)
+          positions[leg.from] = 0;
+      }
+      const kept = 1 - gasUsd / total();
+      positions.forEach((_, i) => positions[i] *= kept);
+      const aprAfter = apr(sample);
+      for (const leg of legs) {
+        if (transactions > 1 || leg === legs[0])
+          tx++;
+        moves.push({
+          t: sample.t,
+          tx,
+          ...leg,
+          sourceLiquidity: sample.venues[leg.from].liquidity,
+          gasUsed: REBALANCE_GAS_PER_LEG,
+          gasWei: gasWei / legs.length,
+          gasUsd: gasUsd / legs.length,
+          aprBefore,
+          aprAfter,
+          expectedGain,
+          restore
+        });
+      }
+      day.rebalances += legs.length;
+      day.gasWei += gasWei;
+      day.gasUsd += gasUsd;
+      lastMoveAt = sample.t;
+    };
     const spots = sample.venues.map(
       (venue, i) => i === dead ? 0n : BigInt(Math.round(rateAt(venue, positions[i]) * RAY2))
     );
+    if (strategy === "eligible_equal_weight" && k > 0 && boundaries.some((date) => dayOf(sample.t) >= date && dayOf(samples[k - 1].t) < date)) {
+      split2 = { open: everyVenue.filter((i) => !barred(i) && !shut(i)), late: everyVenue };
+    }
+    if (split2) {
+      const open = split2.open.filter((i) => !barred(i) && !shut(i));
+      const late = split2.late.some((i) => open.includes(i)) ? split2.late : everyVenue;
+      const takers = late.filter((i) => open.includes(i));
+      const rest = late.reduce((sum2, i) => sum2 + positions[i], 0);
+      const legs = legsTo(
+        positions,
+        positions.map((position, i) => !late.includes(i) ? position : takers.includes(i) ? rest / takers.length : 0)
+      ).map((leg) => ({ ...leg, forced: barred(leg.from) ?? void 0 }));
+      const can = executable(legs);
+      const waiting = legs.filter((leg) => !can.includes(leg));
+      day.refused += waiting.length;
+      if (can.length > 0)
+        execute(can, can.length, null);
+      split2 = waiting.length > 0 ? { open, late: [...new Set(waiting.flatMap((leg) => [leg.from, leg.to]))] } : null;
+    }
     if (strategy === "thesauros_simple" || strategy === "first_split_held" && lastMoveAt === null) {
       const change = previousTotal === 0 ? 0 : Math.abs(total() - previousTotal) / previousTotal * 100;
-      const tripped = config2.risk_guard_enabled && change > config2.circuit_breaker_percent;
+      const tripped = config2.policy !== "water_filling" && config2.risk_guard_enabled && change > config2.circuit_breaker_percent;
       if (tripped) {
         scenario?.events.push({ rule: "circuit_breaker", date: dayOf(sample.t), change });
       } else {
         const histories = spots.map(
-          (_, i) => seen.length === 0 || seen[0].t > sample.t - 12 * 3600 + 600 ? "unavailable" : Array.from({ length: 12 }, (_unused, hour) => {
+          (_, i) => readSince[i] > sample.t - 12 * 3600 + 600 || shut(i) ? "unavailable" : Array.from({ length: 12 }, (_unused, hour) => {
             const at = sample.t - (hour + 1) * 3600;
             const after = seen.findIndex((entry) => entry.t >= at);
             const right = after < 0 ? { t: sample.t, rates: spots } : seen[after];
             const left = seen[Math.max(0, (after < 0 ? seen.length : after) - 1)];
-            const share = right.t === left.t ? 0 : Math.max(0, at - left.t) / (right.t - left.t);
-            const rate = Number(left.rates[i]) + (Number(right.rates[i]) - Number(left.rates[i])) * share;
+            const share2 = right.t === left.t ? 0 : Math.max(0, at - left.t) / (right.t - left.t);
+            const rate = Number(left.rates[i]) + (Number(right.rates[i]) - Number(left.rates[i])) * share2;
             return { ageSeconds: (hour + 1) * 3600, rate: BigInt(Math.round(rate)) };
           })
         );
-        const decision = decideNew(
-          {
-            t: sample.t,
-            spots: spots.map((spot, i) => tooSmall(sample.venues[i]) ? 0n : spot),
-            balances: positions.map((position) => BigInt(Math.floor(position * USDC))),
-            recorded: seen,
-            lastMoveAt,
-            histories
-          },
-          pathConfig
-        );
-        if (scenario?.target !== void 0 && sample.t < trigger + 7 * DAY && decision.anomalous[scenario.target]) {
-          scenario.events.push({ rule: "anomaly_gate", date: dayOf(sample.t) });
+        const balances = positions.map((position) => BigInt(Math.floor(position * USDC)));
+        const read = spots.map((spot, i) => barred(i) ? 0n : spot);
+        let decided;
+        let gain;
+        let restore;
+        if (config2.policy === "water_filling") {
+          if (config2.impact_exponent === "measured") {
+            sample.venues.forEach((venue, i) => exponents[i] = measuredExponent(venue) ?? exponents[i]);
+          }
+          const input = {
+            spots: read,
+            signals: read.map((spot, i) => rateSignal(spot, histories[i], INTRA_CHAIN_SIGNAL_WINDOW.windowSeconds / 2)),
+            balances,
+            alphas: [...exponents],
+            // The planner's market size has the vault's own position in it.
+            marketSizes: sample.venues.map((venue, i) => BigInt(Math.floor(venue.supplied * USDC)) + balances[i]),
+            entry: config2.providers.indexOf(config2.entry_provider),
+            previous: proposed
+          };
+          const decision = decideWaterFill(input, waterFill);
+          proposed = decision.previous;
+          if (strategy === "thesauros_simple" && !scenario) {
+            decisions.push(
+              JSON.stringify(
+                { t: sample.t, input, config: waterFill, decision },
+                (_key, value) => typeof value === "bigint" ? value.toString() : value
+              )
+            );
+          }
+          decided = decision;
+          gain = decision.deltaPercent;
+          restore = decision.restore;
+        } else {
+          const decision = decideNew(
+            { t: sample.t, spots: read, balances, recorded: seen, lastMoveAt, histories },
+            pathConfig
+          );
+          if (scenario?.target !== void 0 && sample.t < trigger + 7 * DAY && decision.anomalous[scenario.target]) {
+            scenario.events.push({ rule: "anomaly_gate", date: dayOf(sample.t) });
+          }
+          decided = decision;
+          gain = decision.deltaPercent ?? null;
         }
-        const legs = decision.legs.filter((leg) => {
-          if (leg.from !== frozen)
-            return true;
-          scenario.events.push({ rule: "frozen_move", date: dayOf(sample.t) });
-          return false;
-        });
-        if (decision.stop === null && legs.length > 0) {
-          const aprBefore = apr(sample);
-          const gasWei = config2.gas_modeling_enabled ? sample.legGas[0] * legs.length + sample.l1Fee[0] : 0;
-          const gasUsd = config2.gas_modeling_enabled ? sample.legGas[1] * legs.length + sample.l1Fee[1] : 0;
-          for (const leg of legs) {
-            const amount = Number(leg.amount) / USDC;
-            positions[leg.from] -= amount;
-            positions[leg.to] += amount;
+        const legs = decided.legs.filter((leg) => !barred(leg.to) && !shut(leg.to) && leg.to !== dead).map((leg) => ({
+          from: leg.from,
+          to: leg.to,
+          amount: Number(leg.amount) / USDC,
+          forced: barred(leg.from) ?? void 0
+        }));
+        if (decided.stop === null && legs.length > 0) {
+          if (legs.some((leg) => leg.from === frozen)) {
+            scenario.events.push({ rule: "frozen_move", date: dayOf(sample.t) });
           }
-          const kept = 1 - gasUsd / total();
-          positions.forEach((_, i) => positions[i] *= kept);
-          const aprAfter = apr(sample);
-          tx++;
-          for (const leg of legs) {
-            moves.push({
-              t: sample.t,
-              tx,
-              from: leg.from,
-              to: leg.to,
-              amount: Number(leg.amount) / USDC,
-              gasUsed: REBALANCE_GAS_PER_LEG,
-              gasWei: gasWei / legs.length,
-              gasUsd: gasUsd / legs.length,
-              aprBefore,
-              aprAfter,
-              expectedGain: decision.deltaPercent
-            });
+          if (executable(legs).length < legs.length) {
+            day.refused += legs.length;
+          } else {
+            execute(legs, 1, legs.some((leg) => leg.forced) ? null : gain, restore);
           }
-          day.rebalances += legs.length;
-          day.gasWei += gasWei;
-          day.gasUsd += gasUsd;
-          lastMoveAt = sample.t;
         }
       }
     }
     previousTotal = total();
     const payable = (reading) => positions.reduce(
-      (sum2, position, i) => sum2 + (i === frozen ? 0 : Math.min(position, reading.venues[i].liquidity)),
+      (sum2, position, i) => sum2 + (i === frozen || i === dead ? 0 : Math.min(position, reading.venues[i].liquidity)),
       0
-    ) / total();
+    ) / (total() || 1);
     lowestPayable = Math.min(lowestPayable, payable(sample));
     seen.push({ t: sample.t, rates: spots });
     while (seen[0].t < sample.t - 2 * DAY)
@@ -26009,9 +26344,13 @@ function simulate(samples, strategy, scenario) {
       if (position === 0 || i === dead)
         return;
       const venue = sample.venues[i];
+      if (!(venue.index > 0 && next.venues[i].index > 0))
+        throw new Error(`${config2.providers[i]} holds ${position} with no index reading after ${dayOf(sample.t)}`);
       const growth = next.venues[i].index / venue.index - 1;
-      const diluted = growth > 0 && venue.rate > 0 ? growth * (rateAt(venue, position) / venue.rate) : growth;
-      positions[i] = position * (1 + diluted);
+      if (venue.rate > 0 && venue.curve.length > 1)
+        dilution[i] = Math.min(1, rateAt(venue, position) / venue.rate);
+      positions[i] = position * (1 + (growth > 0 ? growth * dilution[i] : growth));
+      day.interest[i] += positions[i] - position;
     });
     if (dayOf(next.t) === dayOf(sample.t) && k < samples.length - 2)
       continue;
@@ -26020,7 +26359,8 @@ function simulate(samples, strategy, scenario) {
       const gross = total();
       const base = config2.high_water_mark ? peak : dayStart;
       fees = Math.max(0, gross - base) * config2.performance_fee_percent / 100 + gross * config2.management_fee_percent / 100 / 365;
-      positions.forEach((_, i) => positions[i] *= 1 - fees / gross);
+      if (fees > 0)
+        positions.forEach((_, i) => positions[i] *= 1 - fees / gross);
       peak = Math.max(peak, total());
     }
     const depegged = scenario?.kind === "depeg" && sample.t >= trigger && sample.t < trigger + config2.stress.depeg.days * DAY;
@@ -26035,13 +26375,14 @@ function simulate(samples, strategy, scenario) {
       venueLiquidity: next.venues.map((venue, i) => i === frozen || i === dead ? 0 : venue.liquidity)
     });
     dayStart = total();
-    day = { rebalances: 0, gasWei: 0, gasUsd: 0 };
+    day = newDay();
     lowestPayable = 1;
   }
-  return { days, moves, bestVault };
+  return { days, moves, bestVault, decisions };
 }
 var money = (value) => value.toFixed(2);
 var percent = (fraction) => (fraction * 100).toFixed(4);
+var share = (position, assets) => (assets === 0 ? 0 : position / assets * 100).toFixed(2);
 function writeCsv(file, header, rows) {
   (0, import_fs.writeFileSync)((0, import_path.join)(OUT, file), [header, ...rows].map((row) => row.join(",")).join("\n") + "\n");
   console.log(`${file}: ${rows.length} rows`);
@@ -26050,6 +26391,7 @@ function dailyRows(strategy, run) {
   return run.days.map((row, d) => {
     const before = d === 0 ? config2.initial_deposit : run.days[d - 1].assets;
     const monthAgo = d >= 30 ? run.days[d - 30].assets : null;
+    const t = Date.parse(row.date) / 1e3;
     return [
       row.date,
       strategy,
@@ -26058,13 +26400,20 @@ function dailyRows(strategy, run) {
       money(row.assets - config2.initial_deposit),
       monthAgo === null ? "" : percent((row.assets / monthAgo) ** (365 / 30) - 1),
       row.rebalances,
+      row.refused,
       Math.round(row.gasWei),
       money(row.gasUsd),
       money(row.fees),
       // TS-394: the baselines carry no Thesauros fee; what a protocol or a curator takes is already in its rate.
       strategy === "thesauros_simple" ? `performance ${config2.performance_fee_percent}% of ${config2.high_water_mark ? "gains above the high-water mark" : "each day's gain"}` : "none (native protocol fees are inside the rates)",
       money(row.liquidity),
-      ...row.positions.map((position) => (position / row.assets * 100).toFixed(2))
+      share(
+        row.positions.reduce((sum2, position, i) => inSet(config2.providers[i], t) ? sum2 : sum2 + position, 0),
+        row.assets
+      ),
+      ...row.positions.map((position) => share(position, row.assets)),
+      // Half a cent of a fall is no fall: not "-0.00".
+      ...row.interest.map((earned) => money(earned).replace(/^-0\.00$/, "0.00"))
     ];
   });
 }
@@ -26079,45 +26428,68 @@ function daysToExit(run, from) {
 }
 function describeResponse(scenario, run, triggerDay, loss) {
   const dayBefore = run.days[triggerDay - 1];
-  const share = scenario.target === void 0 ? 0 : dayBefore.positions[scenario.target] / dayBefore.assets * 100;
-  const cap = pathConfig.capPercent < 100 ? ` (provider cap ${pathConfig.capPercent}%)` : "";
+  const share2 = scenario.target === void 0 ? 0 : dayBefore.positions[scenario.target] / dayBefore.assets * 100;
+  const planner = config2.policy === "water_filling";
+  const cap = pathConfig.capPercent >= 100 ? "" : planner && config2.providers[scenario.target ?? -1] === config2.entry_provider ? " (the entry provider, which the allocator does not cap)" : planner && Number(share2.toFixed(2)) > pathConfig.capPercent ? ` (above the provider cap of ${pathConfig.capPercent}%: the allocator takes the excess out at the next reading at which the move can execute)` : Number(share2.toFixed(2)) > pathConfig.capPercent ? ` (above the provider cap of ${pathConfig.capPercent}%, which acts only when a rebalance executes)` : ` (provider cap ${pathConfig.capPercent}%)`;
   const limit = config2.circuit_breaker_percent;
   const breaker = scenario.events.find((event) => event.rule === "circuit_breaker");
   const anomaly = scenario.events.find((event) => event.rule === "anomaly_gate");
   const excluded = anomaly ? ` Anomaly gate excluded the provider on ${anomaly.date}.` : "";
+  const tripped = planner ? "RiskGuard's circuit breaker and anomaly gate are the public vault's and are not on the allocator's path: no rule of the allocator reads a loss." : breaker ? `Circuit breaker triggered on ${breaker.date} (assets moved ${breaker.change.toFixed(
+    1
+  )}% against a ${limit}% threshold): no rebalance was decided at that reading, and the breaker acts at that reading only.` : `Circuit breaker not triggered: assets moved ${(loss * 100).toFixed(1)}% against a ${limit}% threshold.`;
+  const next = run.days.slice(triggerDay).find((row) => row.rebalances > 0);
+  const moved = next ? `The vault's first movement after the event is on ${next.date}.` : "The vault makes no movement in the rest of the year.";
+  const lost = `${(loss * 100).toFixed(2)}% of the vault's assets at the lowest daily close`;
   switch (scenario.kind) {
     case "depeg":
       return "Nothing in the vault reacts: it is denominated in USDC and no rule reads the dollar price. The USDC balance is unaffected; the scenario changes the USD valuation only.";
     case "curator_bad_debt":
-      return `The position was ${share.toFixed(0)}% of the vault${cap}, so the loss stopped at ${(loss * 100).toFixed(
-        2
-      )}% of the vault's assets. Circuit breaker not triggered: assets moved ${(loss * 100).toFixed(
-        1
-      )}% against a ${limit}% threshold. There is no exit rule: the rebalancer keeps the position.` + (config2.high_water_mark ? " No performance fee is charged until the previous high is regained." : " The performance fee is charged again from the first positive day: the contract has no high-water mark.") + excluded;
-    case "protocol_hack":
-      return (breaker ? `Circuit breaker triggered on ${breaker.date} (assets moved ${breaker.change.toFixed(
-        1
-      )}% against a ${limit}% threshold) and halted rebalancing for that run. ` : "") + `The position was ${share.toFixed(0)}% of the vault${cap}, so the loss stopped at ${(loss * 100).toFixed(
-        1
-      )}% of the vault's assets. The remaining funds stayed allocated across the other providers.`;
+      return `The position was ${share2.toFixed(2)}% of the vault${cap}, so the loss is ${lost}. ${tripped} There is no exit rule: the position stays until a rebalance by rate moves it. ${moved}` + (config2.high_water_mark ? " No performance fee is charged until the previous high is regained." : " The performance fee is charged again from the first positive day: the contract has no high-water mark.") + excluded;
+    case "protocol_hack": {
+      const after = run.days[triggerDay];
+      const top = largest(after.positions);
+      return `${tripped} ${moved} The position was ${share2.toFixed(2)}% of the vault${cap}, so the loss is ${lost}. ` + (Math.round(share2) >= 100 ? "Nothing was held in another provider." : `${after.rebalances === 0 ? "What was left stayed where it was" : "What was left was rebalanced that day"}: ${(after.positions[top] / after.assets * 100).toFixed(2)}% of it in ${label(
+        config2.providers[top]
+      )} at the close of that day.`) + (config2.stress.protocol_hack.loss_percent < 100 ? " What the venue kept cannot be withdrawn, so no later rebalance that moves it can execute." : "");
+    }
     case "withdrawal_freeze": {
-      const first = run.days[triggerDay];
-      const blocked = new Set(
-        scenario.events.filter((event) => event.rule === "frozen_move").map((event) => event.date)
-      ).size;
-      return `No loss. ${(first.liquidity / first.assets * 100).toFixed(
-        0
-      )}% of the vault's assets stayed withdrawable from the first day and all of it after ${config2.stress.withdrawal_freeze.days} days. No rule detects a freeze. Rebalances out of the frozen provider that would have reverted: ${blocked}.` + excluded;
+      const frozenDays = run.days.slice(triggerDay, triggerDay + config2.stress.withdrawal_freeze.days);
+      const payable = (row) => row.liquidity / row.assets * 100;
+      const lowest = frozenDays.reduce((low, row) => payable(row) < payable(low) ? row : low);
+      const reverted = scenario.events.filter((event) => event.rule === "frozen_move");
+      const [from, until] = scenario.frozen;
+      const made = run.moves.filter((move) => move.t >= from && move.t < until).length;
+      return `No loss. ${payable(frozenDays[0]).toFixed(2)}% of the vault's assets could be withdrawn on the first day and ${payable(lowest).toFixed(2)}% at the lowest, on ${lowest.date}; the frozen position returns after ${config2.stress.withdrawal_freeze.days} days. No rule detects a freeze. Days on which a rebalance with a movement out of the frozen venue would have reverted as a whole: ${new Set(reverted.map((event) => event.date)).size}, at ${reverted.length} readings. ` + (made === 0 ? "The vault made no movement while the venue was frozen." : `The vault made ${made} movements while the venue was frozen, none of them out of it.`) + excluded;
     }
   }
 }
 function main() {
+  for (const name of [config2.entry_provider, config2.aave_provider, ...Object.keys(config2.eligible_periods ?? {})]) {
+    if (!config2.providers.includes(name))
+      throw new Error(`${name} is not among the simulated providers`);
+  }
+  for (const [from, to] of Object.values(config2.eligible_periods ?? {}).flat()) {
+    if (!([from, to].every((date) => /^\d{4}-\d\d-\d\d$/.test(date)) && from < to))
+      throw new Error(`eligible_periods: [${from}, ${to}) is not a period of UTC dates`);
+  }
+  if (config2.policy === "water_filling" && !config2.risk_guard_enabled)
+    throw new Error("policy water_filling reads its cap through risk_guard_enabled: set it to true");
   (0, import_fs.mkdirSync)(OUT, { recursive: true });
   const samples = loadSamples();
-  const strategies = ["thesauros_simple", "first_split_held", "just_aave", "just_best_vault"];
-  const venueColumns = config2.providers.map((name) => `pct_${label(name).toLowerCase().replace(/ /g, "_")}`);
+  const strategies = [
+    "thesauros_simple",
+    "first_split_held",
+    "eligible_equal_weight",
+    "just_aave",
+    "just_best_vault"
+  ];
+  const columns = (prefix) => config2.providers.map((name) => `${prefix}_${label(name).toLowerCase().replace(/ /g, "_")}`);
+  const venueColumns = columns("pct");
   const runs = strategies.map((strategy) => simulate(samples, strategy));
   const [thesauros] = runs;
+  if (process.env.TANGEM_DECISIONS)
+    (0, import_fs.writeFileSync)(process.env.TANGEM_DECISIONS, thesauros.decisions.join("\n") + "\n");
   writeCsv(
     "tangem-simulation-daily.csv",
     [
@@ -26128,12 +26500,15 @@ function main() {
       "cumulative_yield",
       "apy_trailing_30d",
       "rebalance_count",
+      "rebalances_refused",
       "gas_spent_wei",
       "gas_spent_usd",
       "fees_paid",
       "fee_basis",
       "available_liquidity",
-      ...venueColumns
+      "outside_set_percent",
+      ...venueColumns,
+      ...columns("interest")
     ],
     runs.flatMap((run, i) => dailyRows(strategies[i], run))
   );
@@ -26147,6 +26522,7 @@ function main() {
       "from",
       "to",
       "amount",
+      "source_free_liquidity",
       "gas_used",
       "gas_cost_wei",
       "gas_cost_usd",
@@ -26156,24 +26532,28 @@ function main() {
       "realized_change_pp",
       "reason"
     ],
-    thesauros.moves.map((move) => [
-      new Date(move.t * 1e3).toISOString().replace(".000Z", "Z"),
-      dayOf(move.t),
-      "thesauros_simple",
-      move.tx,
-      label(config2.providers[move.from]),
-      label(config2.providers[move.to]),
-      money(move.amount),
-      move.gasUsed,
-      Math.round(move.gasWei),
-      move.gasUsd.toFixed(4),
-      percent(move.aprBefore),
-      percent(move.aprAfter),
-      move.expectedGain.toFixed(4),
-      ((move.aprAfter - move.aprBefore) * 100).toFixed(4),
-      // The decision compares rates as they stand before the move; what the vault earns after it is the next column.
-      `expected gain on the rates before the move at least ${LIVE.thresholdBps / 100} pp a year`
-    ])
+    runs.flatMap(
+      (run, i) => run.moves.map((move) => [
+        new Date(move.t * 1e3).toISOString().replace(".000Z", "Z"),
+        dayOf(move.t),
+        strategies[i],
+        move.tx,
+        label(config2.providers[move.from]),
+        label(config2.providers[move.to]),
+        money(move.amount),
+        money(move.sourceLiquidity),
+        move.gasUsed,
+        Math.round(move.gasWei),
+        move.gasUsd.toFixed(4),
+        percent(move.aprBefore),
+        percent(move.aprAfter),
+        move.expectedGain === null ? "" : move.expectedGain.toFixed(4),
+        ((move.aprAfter - move.aprBefore) * 100).toFixed(4),
+        // The decision compares rates as they stand before the move; what the vault earns after it is
+        // the column before. A forced exit is no such comparison: the venue was read as paying nothing.
+        move.forced ? BARRED[move.forced] : strategies[i] === "eligible_equal_weight" ? "equal parts over the venues that take money" : move.restore ? `back under the provider cap of ${pathConfig.capPercent}% whatever the move earns` : move.expectedGain === null ? "moved in the transaction of a forced exit" : config2.policy === "water_filling" ? `expected gain with the vault's own deposit priced at least ${waterFill.intraMinGainBps / 100} pp a year at ${waterFill.persistenceRuns} readings in a row` : `expected gain on the rates before the move at least ${LIVE.thresholdBps / 100} pp a year`
+      ])
+    )
   );
   const kinds = ["depeg", "curator_bad_debt", "protocol_hack", "withdrawal_freeze"];
   const stressRows = [];
@@ -26222,7 +26602,7 @@ function main() {
         money(value(row)),
         money(row.liquidity),
         row.rebalances,
-        ...row.positions.map((position) => (position / row.assets * 100).toFixed(2))
+        ...row.positions.map((position) => share(position, row.assets))
       ])
     );
   }
@@ -26256,33 +26636,49 @@ function main() {
     ],
     timelines
   );
+  const years = (samples[samples.length - 1].t - samples[0].t) / YEAR;
   runs.forEach((run, i) => {
     const last = run.days[run.days.length - 1];
     const yields = run.days.reduce(
       (sum2, row, d) => sum2 + row.assets - (d ? run.days[d - 1].assets : config2.initial_deposit),
       0
     );
-    if (Math.abs(yields - (last.assets - config2.initial_deposit)) > 0.01)
+    if (!(Math.abs(yields - (last.assets - config2.initial_deposit)) <= 0.01))
       throw new Error(`${strategies[i]}: daily yields do not add up`);
-    const years = run.days.length * DAY / YEAR;
+    run.days.forEach((row, d) => {
+      const change = row.assets - (d ? run.days[d - 1].assets : config2.initial_deposit);
+      const paid = row.interest.reduce((sum2, earned) => sum2 + earned, 0) - row.gasUsd - row.fees;
+      if (!(Math.abs(paid - change) <= 0.01))
+        throw new Error(`${strategies[i]}: interest less gas and fees is not the change of the balance on ${row.date}`);
+    });
+    if (run.days.some((row) => row.positions.some((position) => !(position >= 0))))
+      throw new Error(`${strategies[i]}: a position is negative or not a number`);
+    const counted = run.days.reduce((sum2, row) => sum2 + row.rebalances, 0);
+    if (counted !== run.moves.length)
+      throw new Error(`${strategies[i]}: rebalance rows ${run.moves.length} != daily count ${counted}`);
+    const outside = run.days.flatMap(
+      (row) => config2.providers.filter((name, p) => row.positions[p] > 2 && !inSet(name, Date.parse(row.date) / 1e3)).map((name) => `${row.date} ${label(name)}`)
+    );
     console.log(
-      `${strategies[i].padEnd(17)} ${run.days[0].date}..${last.date} (${run.days.length} days)  final $${money(
+      `${strategies[i].padEnd(21)} ${run.days[0].date}..${last.date} (${run.days.length} days)  final $${money(
         last.assets
-      )}  net APY ${percent((last.assets / config2.initial_deposit) ** (1 / years) - 1)}%  rebalances ${run.moves.length}  gas $${money(run.days.reduce((s, r) => s + r.gasUsd, 0))}  fees $${money(
+      )}  net APY ${percent((last.assets / config2.initial_deposit) ** (1 / years) - 1)}%  rebalances ${run.moves.length}  refused ${run.days.reduce((s, r) => s + r.refused, 0)}  gas $${money(run.days.reduce((s, r) => s + r.gasUsd, 0))}  fees $${money(
         run.days.reduce((s, r) => s + r.fees, 0)
-      )}` + (run.bestVault ? `  (${run.bestVault})` : "")
+      )}` + (config2.eligible_periods ? `  outside the set ${outside.length} venue-days${outside.length ? ", first " + outside[0] : ""}` : "") + (run.bestVault ? `  (${run.bestVault})` : "")
     );
   });
-  const counted = thesauros.days.reduce((sum2, row) => sum2 + row.rebalances, 0);
-  if (counted !== thesauros.moves.length)
-    throw new Error(`rebalance rows ${thesauros.moves.length} != daily count ${counted}`);
   if (thesauros.days[0].date !== config2.start_date)
     throw new Error(`the series starts on ${thesauros.days[0].date}`);
   stressRows.forEach((row) => console.log(row.join(" | ")));
-  console.log("Checks passed: daily yields add up to the final balance, rebalance rows match the daily counts");
+  console.log(
+    "Checks passed: daily yields add up to the final balance, interest less gas and fees is the change of the balance on every day, no position is negative or not a number, rebalance rows match the daily counts"
+  );
 }
 main();
 /*! Bundled license information:
+
+@noble/hashes/esm/utils.js:
+  (*! noble-hashes - MIT License (c) 2022 Paul Miller (paulmillr.com) *)
 
 decimal.js/decimal.mjs:
   (*!
@@ -26292,7 +26688,4 @@ decimal.js/decimal.mjs:
    *  Copyright (c) 2025 Michael Mclaughlin <M8ch88l@gmail.com>
    *  MIT Licence
    *)
-
-@noble/hashes/esm/utils.js:
-  (*! noble-hashes - MIT License (c) 2022 Paul Miller (paulmillr.com) *)
 */

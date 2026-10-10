@@ -1,0 +1,70 @@
+{
+  "network": "Base",
+  "token": "USDC",
+  "initial_deposit": 10000000,
+  "start_date": "2025-10-07",
+  "end_date": "2026-10-07",
+  "risk_guard_enabled": true,
+  "gas_modeling_enabled": true,
+  "rate_impact_enabled": false,
+  "performance_fee_percent": 20,
+  "management_fee_percent": 0,
+  "high_water_mark": false,
+  "policy": "water_filling",
+  "impact_exponent": "production",
+  "liquidity_rule": true,
+  "entry_provider": "AaveV3Provider",
+  "providers": [
+    "AaveV3Provider",
+    "SteakhouseMorphoProvider",
+    "GauntletPrimeMorphoProvider",
+    "SteakhousePrimeMorphoProvider",
+    "SparkMorphoProvider",
+    "SteakhousePrimeV2MorphoProvider",
+    "CbBtcMarketMorphoProvider"
+  ],
+  "aave_provider": "AaveV3Provider",
+  "circuit_breaker_percent": 20,
+  "max_share_of_venue_percent": 10,
+  "eligible_periods": {
+    "AaveV3Provider": [["2025-10-07", "2026-10-07"]],
+    "SteakhouseMorphoProvider": [["2025-10-07", "2026-10-07"]],
+    "GauntletPrimeMorphoProvider": [["2025-12-07", "2026-10-07"]],
+    "SteakhousePrimeMorphoProvider": [["2026-02-07", "2026-08-07"]],
+    "SparkMorphoProvider": [
+      ["2025-10-07", "2026-02-07"],
+      ["2026-09-07", "2026-10-07"]
+    ],
+    "SteakhousePrimeV2MorphoProvider": [["2026-05-07", "2026-10-07"]],
+    "CbBtcMarketMorphoProvider": [["2025-10-07", "2026-10-07"]]
+  },
+  "output": "simulation-alloc-a-no-rate-impact",
+  "labels": {
+    "AaveV3Provider": "Aave V3",
+    "SteakhouseMorphoProvider": "Steakhouse USDC",
+    "GauntletPrimeMorphoProvider": "Gauntlet USDC Prime",
+    "SteakhousePrimeMorphoProvider": "Steakhouse Prime USDC",
+    "SparkMorphoProvider": "Spark USDC Vault",
+    "SteakhousePrimeV2MorphoProvider": "Steakhouse Prime USDC V2",
+    "CbBtcMarketMorphoProvider": "Morpho cbBTC market"
+  },
+  "stress": {
+    "trigger_date": "2026-04-07",
+    "depeg": {
+      "price": 0.95,
+      "days": 14
+    },
+    "curator_bad_debt": {
+      "provider": "largest",
+      "loss_percent": 10
+    },
+    "protocol_hack": {
+      "provider": "largest",
+      "loss_percent": 100
+    },
+    "withdrawal_freeze": {
+      "provider": "largest",
+      "days": 30
+    }
+  }
+}

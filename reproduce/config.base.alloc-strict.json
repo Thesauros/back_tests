@@ -1,0 +1,49 @@
+{
+  "network": "Base",
+  "token": "USDC",
+  "initial_deposit": 10000000,
+  "start_date": "2025-10-07",
+  "end_date": "2026-10-07",
+  "risk_guard_enabled": true,
+  "gas_modeling_enabled": true,
+  "rate_impact_enabled": true,
+  "performance_fee_percent": 20,
+  "management_fee_percent": 0,
+  "high_water_mark": false,
+  "policy": "water_filling",
+  "impact_exponent": "production",
+  "liquidity_rule": true,
+  "entry_provider": "AaveV3Provider",
+  "providers": ["AaveV3Provider", "CbBtcMarketMorphoProvider"],
+  "aave_provider": "AaveV3Provider",
+  "circuit_breaker_percent": 20,
+  "max_share_of_venue_percent": 10,
+  "eligible_periods": {
+    "AaveV3Provider": [["2025-10-07", "2026-10-07"]],
+    "CbBtcMarketMorphoProvider": [["2025-10-07", "2026-10-07"]]
+  },
+  "output": "simulation-alloc-strict",
+  "labels": {
+    "AaveV3Provider": "Aave V3",
+    "CbBtcMarketMorphoProvider": "Morpho cbBTC market"
+  },
+  "stress": {
+    "trigger_date": "2026-04-07",
+    "depeg": {
+      "price": 0.95,
+      "days": 14
+    },
+    "curator_bad_debt": {
+      "provider": "largest",
+      "loss_percent": 10
+    },
+    "protocol_hack": {
+      "provider": "largest",
+      "loss_percent": 100
+    },
+    "withdrawal_freeze": {
+      "provider": "largest",
+      "days": 30
+    }
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "network": "Ethereum",
+  "token": "USDC",
+  "initial_deposit": 10000000,
+  "start_date": "2025-10-07",
+  "end_date": "2026-10-07",
+  "risk_guard_enabled": true,
+  "gas_modeling_enabled": true,
+  "rate_impact_enabled": true,
+  "performance_fee_percent": 25,
+  "management_fee_percent": 0,
+  "high_water_mark": false,
+  "policy": "public_vault",
+  "liquidity_rule": true,
+  "entry_provider": "AaveV3Provider",
+  "providers": [
+    "AaveV3Provider",
+    "CompoundV3Provider",
+    "FluidProvider",
+    "SparkSavingsProvider",
+    "SteakhouseMorphoProvider",
+    "GauntletPrimeMorphoProvider",
+    "VaultBridgeMorphoProvider",
+    "GauntletPrimeV2MorphoProvider",
+    "SteakhousePrimeV2MorphoProvider",
+    "CbBtcMarketMorphoProvider",
+    "WbtcMarketMorphoProvider"
+  ],
+  "aave_provider": "AaveV3Provider",
+  "circuit_breaker_percent": 20,
+  "max_share_of_venue_percent": 10,
+  "eligible_periods": {
+    "AaveV3Provider": [["2025-10-07", "2026-10-07"]],
+    "CompoundV3Provider": [["2025-10-07", "2026-10-07"]],
+    "FluidProvider": [["2025-10-07", "2026-10-07"]],
+    "SparkSavingsProvider": [["2025-10-07", "2026-10-07"]],
+    "SteakhouseMorphoProvider": [["2025-10-07", "2026-07-07"]],
+    "GauntletPrimeMorphoProvider": [["2025-10-07", "2026-06-07"]],
+    "VaultBridgeMorphoProvider": [["2026-03-07", "2026-04-07"]],
+    "GauntletPrimeV2MorphoProvider": [["2026-07-07", "2026-08-07"]],
+    "SteakhousePrimeV2MorphoProvider": [["2026-08-07", "2026-09-07"]],
+    "CbBtcMarketMorphoProvider": [["2025-10-07", "2026-10-07"]],
+    "WbtcMarketMorphoProvider": [
+      ["2025-10-07", "2026-02-07"],
+      ["2026-04-07", "2026-10-07"]
+    ]
+  },
+  "output": "simulation-public-a",
+  "labels": {
+    "AaveV3Provider": "Aave V3",
+    "CompoundV3Provider": "Compound V3",
+    "FluidProvider": "Fluid fUSDC",
+    "SparkSavingsProvider": "Spark Savings sUSDC",
+    "SteakhouseMorphoProvider": "Steakhouse USDC",
+    "GauntletPrimeMorphoProvider": "Gauntlet USDC Prime",
+    "VaultBridgeMorphoProvider": "Vault Bridge USDC",
+    "GauntletPrimeV2MorphoProvider": "Gauntlet USDC Prime V2",
+    "SteakhousePrimeV2MorphoProvider": "Steakhouse Prime USDC V2",
+    "CbBtcMarketMorphoProvider": "Morpho cbBTC market",
+    "WbtcMarketMorphoProvider": "Morpho WBTC market"
+  },
+  "stress": {
+    "trigger_date": "2026-04-07",
+    "depeg": {
+      "price": 0.95,
+      "days": 14
+    },
+    "curator_bad_debt": {
+      "provider": "largest",
+      "loss_percent": 10
+    },
+    "protocol_hack": {
+      "provider": "largest",
+      "loss_percent": 100
+    },
+    "withdrawal_freeze": {
+      "provider": "largest",
+      "days": 30
+    }
+  }
+}

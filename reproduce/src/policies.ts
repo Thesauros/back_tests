@@ -12,10 +12,16 @@ import {
 /**
  * The allocation decisions the replay compares, without I/O. One call is one cron run of one vault.
  *
- * OLD is the live public-vault path on origin/master (GreedyLinear), ported rule by rule from
- * REBALANCE_ALGORITHM.md Part I; each step carries its S-number. NEW is the same path after
- * #53/#55/#60 (enter on min(spot, 12 h EWMA), keep or exit on spot, gain-based threshold, re-cap
- * after the anomalous exclusion). WATERFILL is the cross-chain allocator's rule inside one network
+ * NEW is a port of the live public-vault path on origin/master: RebalanceService.calculateRun with
+ * planAllocation (#53/#55/#60: enter on min(spot, 12 h EWMA), keep or exit on spot, gain-based
+ * threshold, re-cap after the anomalous exclusion). It calls the library functions planAllocation
+ * calls (rateSignal, solveSegmentGreedy, allocationGain) and repeats the RiskGuardService steps
+ * and buildMoveInstructions in its own code; the rebalancer does not call it. A rate recorded
+ * exactly smaWindowSeconds before the run is inside the anomaly window, as it is there
+ * (RateHistoryService.getHistory reads ZRANGEBYSCORE, inclusive).
+ * OLD is that path as origin/master had it before those changes (GreedyLinear on spot rates, no
+ * longer in apps/rebalancer/src), ported rule by rule from REBALANCE_ALGORITHM.md Part I; each
+ * step carries its S-number. WATERFILL is the cross-chain allocator's rule inside one network
  * (#68), applied to the public vault's providers.
  */
 
@@ -88,7 +94,7 @@ const RAY_DECIMAL = new Decimal(10).pow(27);
  * caught (a drop reaches 100% at most and the test is strict).
  */
 export function anomalyGate(input: RunInput, config: PathConfig): boolean[] {
-  const window = input.recorded.filter(({ t }) => t < input.t && t > input.t - config.smaWindowSeconds);
+  const window = input.recorded.filter(({ t }) => t < input.t && t >= input.t - config.smaWindowSeconds);
   return input.spots.map((rate, i) => {
     if (window.length < config.minSamples) return false;
     const average = window.reduce((sum, { rates }) => sum + rates[i], 0n) / BigInt(window.length);
@@ -286,7 +292,7 @@ export function buildMoveInstructions(
   return legs;
 }
 
-/** OLD, origin/master GreedyLinear: S3-S11 on spot rates. */
+/** OLD, GreedyLinear as origin/master ran it before #53/#55/#60: S3-S11 on spot rates. */
 export function decideOld(input: RunInput, config: PathConfig = LIVE): Decision {
   const anomalous = anomalyGate(input, config);
   if (anomalous.every(Boolean)) return { stop: 'all anomalous', anomalous, legs: [] };
@@ -398,16 +404,28 @@ export interface WaterFillInput {
   readonly previous: { readonly fingerprint: string; readonly count: number } | null;
 }
 
+/** PlannerService's LEG_DUST: the smallest leg worth its gas, asset units ($10). */
+const LEG_DUST = 10_000_000n;
+
 /**
- * WATERFILL, PlannerService.intraChainRebalance of #68 with nothing incoming: water-filling with
- * impact under min(cap x total, 10% of the market), legs largest first; the move must clear
- * $1k, gain >= 0.05 pp of the vault a year and gain x 7 d > 2 x gas, and the same providers must be
- * filled and drained on `persistenceRuns` runs in a row.
+ * WATERFILL, PlannerService.intraChainRebalance of origin/master 580d1e9 with nothing incoming:
+ * water-filling with impact under min(cap x total, 10% of the market), legs largest first, legs
+ * under $10 dropped; the move must clear $1k, gain >= 0.05 pp of the vault a year and
+ * gain x 7 d > 2 x gas, and the same providers must be filled and drained on `persistenceRuns` runs
+ * in a row. A provider above its cap goes back one basis point under it whatever the move earns
+ * and however often it was proposed (`restore`); the entry provider has no cap. The planner's
+ * persistenceMinSeconds (14 minutes by default) is left out: replayed runs are hours apart.
  */
 export function decideWaterFill(
   input: WaterFillInput,
   config: WaterFillConfig = XC
-): { legs: Leg[]; previous: WaterFillInput['previous']; deltaPercent: number | null; stop: string | null } {
+): {
+  legs: Leg[];
+  previous: WaterFillInput['previous'];
+  deltaPercent: number | null;
+  stop: string | null;
+  restore?: boolean;
+} {
   const total = input.balances.reduce((sum, b) => sum + b, 0n);
   const curves: (RateCurve & { cap: bigint })[] = input.spots.map((spot, i) => {
     const byBps = (total * BigInt(config.capBps - 1)) / 10_000n;
@@ -421,7 +439,7 @@ export function decideWaterFill(
       cap: byBps < byMarket ? byBps : byMarket,
     };
   });
-  const targets = solveWaterFilling(curves, input.entry, total).amounts;
+  const targets = total > 0n ? solveWaterFilling(curves, input.entry, total).amounts : input.balances.map(() => 0n);
   const senders = input.balances
     .map((b, index) => ({ index, excess: b - targets[index] }))
     .filter((e) => e.excess > 0n)
@@ -430,38 +448,63 @@ export function decideWaterFill(
     .map((b, index) => ({ index, deficit: targets[index] - b }))
     .filter((e) => e.deficit > 0n)
     .sort((a, b) => (b.deficit > a.deficit ? 1 : b.deficit < a.deficit ? -1 : 0));
-  const legs: Leg[] = [];
+  const built: Leg[] = [];
   for (let s = 0, r = 0; s < senders.length && r < receivers.length; ) {
     const amount = senders[s].excess < receivers[r].deficit ? senders[s].excess : receivers[r].deficit;
-    if (amount > 0n) legs.push({ from: senders[s].index, to: receivers[r].index, amount });
+    if (amount > 0n) built.push({ from: senders[s].index, to: receivers[r].index, amount });
     senders[s].excess -= amount;
     receivers[r].deficit -= amount;
     if (senders[s].excess <= 0n) s++;
     if (receivers[r].deficit <= 0n) r++;
   }
+  const value = (legs: Leg[]) => {
+    const after = [...input.balances];
+    for (const leg of legs) {
+      after[leg.from] -= leg.amount;
+      after[leg.to] += leg.amount;
+    }
+    const gain = allocationGain(curves, after, input.balances);
+    return { after, gain, deltaPercent: total === 0n ? 0 : (gain / Number(total)) * 100 };
+  };
+  const legs = built.filter((leg) => leg.amount >= LEG_DUST);
   const moved = legs.reduce((sum, leg) => sum + leg.amount, 0n);
-  const after = [...input.balances];
-  for (const leg of legs) {
-    after[leg.from] -= leg.amount;
-    after[leg.to] += leg.amount;
-  }
-  const gain = allocationGain(curves, after, input.balances);
-  const deltaPercent = total === 0n ? 0 : (gain / Number(total)) * 100;
+  const { after, gain, deltaPercent } = value(legs);
   const ranked =
     moved > 0n &&
     moved >= config.minMove &&
     gain >= (Number(total) * config.intraMinGainBps) / 10_000 &&
     (gain * config.horizonDays) / 365 > Number(config.gasCost) * config.hysteresisK;
-  if (!ranked) return { legs: [], previous: null, deltaPercent, stop: 'below threshold' };
-  const side = (sign: bigint) =>
-    after
-      .map((amount, i) => ((amount - input.balances[i]) * sign >= config.minMove ? i : -1))
-      .filter((i) => i >= 0)
-      .join(',');
-  const fingerprint = `in:${side(1n)}|out:${side(-1n)}`;
-  const count = input.previous?.fingerprint === fingerprint ? input.previous.count + 1 : 1;
-  const previous = { fingerprint, count };
-  if (count < config.persistenceRuns)
-    return { legs: [], previous, deltaPercent, stop: `run ${count} of ${config.persistenceRuns}` };
-  return { legs, previous, deltaPercent, stop: null };
+  let previous: WaterFillInput['previous'] = null;
+  if (ranked) {
+    const side = (sign: bigint) =>
+      after
+        .map((amount, i) => ((amount - input.balances[i]) * sign >= config.minMove ? i : -1))
+        .filter((i) => i >= 0)
+        .join(',');
+    const fingerprint = `in:${side(1n)}|out:${side(-1n)}`;
+    previous = { fingerprint, count: input.previous?.fingerprint === fingerprint ? input.previous.count + 1 : 1 };
+    if (previous.count >= config.persistenceRuns) return { legs, previous, deltaPercent, stop: null };
+  }
+  // Only the excess leaves a provider above its cap, in the order of the full move's legs, dust kept.
+  const left = new Map<number, bigint>();
+  input.balances.forEach((balance, i) => {
+    if (i !== input.entry && balance * 10_000n > total * BigInt(config.capBps))
+      left.set(i, balance - (total * BigInt(config.capBps - 1)) / 10_000n);
+  });
+  const restore: Leg[] = [];
+  for (const leg of built) {
+    const room = left.get(leg.from) ?? 0n;
+    const amount = leg.amount < room ? leg.amount : room;
+    if (amount <= 0n) continue;
+    left.set(leg.from, room - amount);
+    restore.push({ ...leg, amount });
+  }
+  if (restore.length > 0)
+    return { legs: restore, previous, deltaPercent: value(restore).deltaPercent, stop: null, restore: true };
+  return {
+    legs: [],
+    previous,
+    deltaPercent,
+    stop: previous ? `run ${previous.count} of ${config.persistenceRuns}` : 'below threshold',
+  };
 }
